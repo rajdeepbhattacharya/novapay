@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novapay-lending
+  namespace: novapay
+  labels:
+    app: novapay-lending
+    version: "1.2.0"
+    tags.datadoghq.com/env: "demo"
+    tags.datadoghq.com/service: "novapay-lending"
+    tags.datadoghq.com/version: "1.2.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: novapay-lending
+  template:
+    metadata:
+      labels:
+        app: novapay-lending
+        tags.datadoghq.com/env: "demo"
+        tags.datadoghq.com/service: "novapay-lending"
+        tags.datadoghq.com/version: "1.2.0"
+      annotations:
+        ad.datadoghq.com/novapay-lending.logs: '[{"source":"python","service":"novapay-lending"}]'
+    spec:
+      containers:
+      - name: novapay-lending
+        image: novapay-lending:latest
+        imagePullPolicy: Never  # Use local minikube image
+        ports:
+        - containerPort: 8002
+        env:
+        - name: DD_AGENT_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: DD_SERVICE
+          value: "novapay-lending"
+        - name: DD_ENV
+          value: "demo"
+        - name: DD_VERSION
+          value: "1.2.0"
+        - name: DD_LOGS_INJECTION
+          value: "true"
+        - name: DD_TRACE_SAMPLE_RATE
+          value: "1.0"
+        - name: DD_RUNTIME_METRICS_ENABLED
+          value: "true"
+        - name: DD_PROFILING_ENABLED
+          value: "true"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8002
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8002
+          initialDelaySeconds: 5
+          periodSeconds: 10

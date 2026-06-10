@@ -1,0 +1,252 @@
+
+# ============================================================
+#  NovaPay Platform — GitLab CI/CD Pipeline
+#  Datadog APJ Royal Rumble 2026
+#
+#  Required CI/CD Variables (Settings → CI/CD → Variables):
+#    DD_API_KEY       — Your Datadog API key (masked)
+#    KUBECONFIG       — Base64-encoded kubeconfig for minikube (optional, for deploy)
+# ============================================================
+
+stages:
+  - test
+  - quality-gate
+  - deploy
+
+# ── Shared defaults ──────────────────────────────────────────
+default:
+  image: python:3.11-slim
+  before_script:
+    - pip install --quiet --upgrade pip
+
+# ── Global Datadog CI Visibility variables ───────────────────
+variables:
+  DD_SITE: "datadoghq.com"
+  DD_ENV: "ci"
+  DD_CIVISIBILITY_ENABLED: "true"
+  DD_CIVISIBILITY_ITR_ENABLED: "true"        # Test Impact Analysis — skips irrelevant tests
+  DD_CIVISIBILITY_FLAKY_RETRY_ENABLED: "true" # Auto-retry flaky tests up to 5x
+  MIN_COVERAGE: "80"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  key: "${CI_COMMIT_REF_SLUG}"
+  paths:
+    - .cache/pip
+
+# ════════════════════════════════════════════════════════════
+#  STAGE 1: TEST (parallel across all 3 services)
+# ════════════════════════════════════════════════════════════
+
+test:payments:
+  stage: test
+  variables:
+    DD_SERVICE: "novapay-payments"
+    DD_VERSION: "2.1.0"
+  before_script:
+    - pip install --quiet -r services/payments/requirements.txt
+  script:
+    - cd services/payments
+    - |
+      pytest tests/ \
+        --ddtrace \
+        --cov=app \
+        --cov-report=xml:coverage.xml \
+        --cov-report=term-missing \
+        --junitxml=test-results.xml \
+        -v
+  after_script:
+    - echo "Payments coverage report generated"
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    when: always
+    reports:
+      junit: services/payments/test-results.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: services/payments/coverage.xml
+    paths:
+      - services/payments/coverage.xml
+      - services/payments/test-results.xml
+    expire_in: 7 days
+
+test:fraud:
+  stage: test
+  variables:
+    DD_SERVICE: "novapay-fraud"
+    DD_VERSION: "1.4.0"
+  before_script:
+    - pip install --quiet -r services/fraud/requirements.txt
+  script:
+    - cd services/fraud
+    - |
+      pytest tests/ \
+        --ddtrace \
+        --cov=app \
+        --cov-report=xml:coverage.xml \
+        --cov-report=term-missing \
+        --junitxml=test-results.xml \
+        -v
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    when: always
+    reports:
+      junit: services/fraud/test-results.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: services/fraud/coverage.xml
+    paths:
+      - services/fraud/coverage.xml
+      - services/fraud/test-results.xml
+    expire_in: 7 days
+
+test:lending:
+  stage: test
+  variables:
+    DD_SERVICE: "novapay-lending"
+    DD_VERSION: "1.2.0"
+  before_script:
+    - pip install --quiet -r services/lending/requirements.txt
+  script:
+    - cd services/lending
+    - |
+      pytest tests/ \
+        --ddtrace \
+        --cov=app \
+        --cov-report=xml:coverage.xml \
+        --cov-report=term-missing \
+        --junitxml=test-results.xml \
+        -v
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    when: always
+    reports:
+      junit: services/lending/test-results.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: services/lending/coverage.xml
+    paths:
+      - services/lending/coverage.xml
+      - services/lending/test-results.xml
+    expire_in: 7 days
+
+# ════════════════════════════════════════════════════════════
+#  STAGE 2: QUALITY GATE
+#  Blocks deploy if any service coverage drops below 80%
+# ════════════════════════════════════════════════════════════
+
+quality-gate:
+  stage: quality-gate
+  variables:
+    DD_SERVICE: "novapay-platform"
+  needs:
+    - test:payments
+    - test:fraud
+    - test:lending
+  script:
+    - |
+      echo "========================================"
+      echo "  NovaPay Quality Gate Check"
+      echo "========================================"
+      GATE_FAILED=0
+
+      for SERVICE in payments fraud lending; do
+        COVERAGE_FILE="services/${SERVICE}/coverage.xml"
+        if [ ! -f "$COVERAGE_FILE" ]; then
+          echo "❌ MISSING: $COVERAGE_FILE"
+          GATE_FAILED=1
+          continue
+        fi
+
+        COVERAGE=$(python3 -c "
+import xml.etree.ElementTree as ET
+tree = ET.parse('${COVERAGE_FILE}')
+root = tree.getroot()
+rate = float(root.attrib.get('line-rate', 0)) * 100
+print(f'{rate:.1f}')
+")
+
+        if python3 -c "import sys; sys.exit(0 if float('${COVERAGE}') >= float('${MIN_COVERAGE}') else 1)"; then
+          echo "✅ PASSED  novapay-${SERVICE}: ${COVERAGE}% (threshold: ${MIN_COVERAGE}%)"
+        else
+          echo "❌ FAILED  novapay-${SERVICE}: ${COVERAGE}% is below ${MIN_COVERAGE}% threshold"
+          GATE_FAILED=1
+        fi
+      done
+
+      echo "========================================"
+      if [ "$GATE_FAILED" -eq 1 ]; then
+        echo "🚫 QUALITY GATE BLOCKED — fix coverage before deploying"
+        exit 1
+      else
+        echo "🟢 QUALITY GATE PASSED — safe to deploy"
+      fi
+  artifacts:
+    when: always
+    paths:
+      - services/*/coverage.xml
+    expire_in: 7 days
+
+
+# ════════════════════════════════════════════════════════════
+#  STAGE 4: DEPLOY to Railway
+#  Runs only on main branch after quality gate passes.
+#  Requires RAILWAY_TOKEN CI/CD variable (Settings → CI/CD → Variables)
+# ════════════════════════════════════════════════════════════
+
+.deploy-template: &deploy-template
+  stage: deploy
+  image: node:20-slim
+  before_script:
+    - npm install -g @railway/cli@latest --silent
+    - railway version
+  only:
+    - main
+
+deploy:payments:
+  <<: *deploy-template
+  needs:
+    - quality-gate
+  script:
+    - |
+      echo "Deploying novapay-payments to Railway..."
+      cd services/payments
+      railway up \
+        --service novapay-payments \
+        --detach \
+        --environment production
+      echo "✅ novapay-payments deployed"
+  environment:
+    name: production/payments
+
+deploy:fraud:
+  <<: *deploy-template
+  needs:
+    - quality-gate
+  script:
+    - |
+      echo "Deploying novapay-fraud to Railway..."
+      cd services/fraud
+      railway up \
+        --service novapay-fraud \
+        --detach \
+        --environment production
+      echo "✅ novapay-fraud deployed"
+  environment:
+    name: production/fraud
+
+deploy:lending:
+  <<: *deploy-template
+  needs:
+    - quality-gate
+  script:
+    - |
+      echo "Deploying novapay-lending to Railway..."
+      cd services/lending
+      railway up \
+        --service novapay-lending \
+        --detach \
+        --environment production
+      echo "✅ novapay-lending deployed"
+  environment:
+    name: production/lending

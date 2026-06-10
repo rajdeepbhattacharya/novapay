@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  datadog-agent:
+    image: datadog/agent:latest
+    environment:
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_SITE=datadoghq.com
+      - DD_APM_ENABLED=true
+      - DD_LOGS_ENABLED=true
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
+      - DD_CONTAINER_EXCLUDE=name:datadog-agent
+      - DD_ENV=demo
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+    ports:
+      - "8126:8126"   # APM
+      - "8125:8125/udp"  # StatsD
+
+  novapay-payments:
+    build: ./services/payments
+    ports:
+      - "8001:8001"
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_SERVICE=novapay-payments
+      - DD_ENV=demo
+      - DD_VERSION=2.1.0
+      - DD_LOGS_INJECTION=true
+      - DD_TRACE_SAMPLE_RATE=1.0
+      - DD_PROFILING_ENABLED=true
+    depends_on:
+      - datadog-agent
+
+  novapay-fraud:
+    build: ./services/fraud
+    ports:
+      - "8003:8003"
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_SERVICE=novapay-fraud
+      - DD_ENV=demo
+      - DD_VERSION=1.4.0
+      - DD_LOGS_INJECTION=true
+      - DD_TRACE_SAMPLE_RATE=1.0
+      - DD_PROFILING_ENABLED=true
+    depends_on:
+      - datadog-agent
+
+  novapay-lending:
+    build: ./services/lending
+    ports:
+      - "8002:8002"
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_SERVICE=novapay-lending
+      - DD_ENV=demo
+      - DD_VERSION=1.2.0
+      - DD_LOGS_INJECTION=true
+      - DD_TRACE_SAMPLE_RATE=1.0
+      - DD_PROFILING_ENABLED=true
+    depends_on:
+      - datadog-agent
+
+  # Traffic generator — runs realistic payment traffic for the demo
+  traffic-generator:
+    image: python:3.11-slim
+    volumes:
+      - ./scripts:/scripts
+    command: >
+      sh -c "pip install requests --quiet && python /scripts/generate_traffic.py"
+    environment:
+      - PAYMENTS_URL=http://novapay-payments:8001
+      - FRAUD_URL=http://novapay-fraud:8003
+      - LENDING_URL=http://novapay-lending:8002
+    depends_on:
+      - novapay-payments
+      - novapay-fraud
+      - novapay-lending
+    restart: on-failure

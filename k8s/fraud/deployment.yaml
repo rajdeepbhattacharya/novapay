@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novapay-fraud
+  namespace: novapay
+  labels:
+    app: novapay-fraud
+    version: "1.4.0"
+    tags.datadoghq.com/env: "demo"
+    tags.datadoghq.com/service: "novapay-fraud"
+    tags.datadoghq.com/version: "1.4.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: novapay-fraud
+  template:
+    metadata:
+      labels:
+        app: novapay-fraud
+        tags.datadoghq.com/env: "demo"
+        tags.datadoghq.com/service: "novapay-fraud"
+        tags.datadoghq.com/version: "1.4.0"
+      annotations:
+        ad.datadoghq.com/novapay-fraud.logs: '[{"source":"python","service":"novapay-fraud"}]'
+    spec:
+      containers:
+      - name: novapay-fraud
+        image: novapay-fraud:latest
+        imagePullPolicy: Never  # Use local minikube image
+        ports:
+        - containerPort: 8003
+        env:
+        - name: DD_AGENT_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: DD_SERVICE
+          value: "novapay-fraud"
+        - name: DD_ENV
+          value: "demo"
+        - name: DD_VERSION
+          value: "1.4.0"
+        - name: DD_LOGS_INJECTION
+          value: "true"
+        - name: DD_TRACE_SAMPLE_RATE
+          value: "1.0"
+        - name: DD_RUNTIME_METRICS_ENABLED
+          value: "true"
+        - name: DD_PROFILING_ENABLED
+          value: "true"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8003
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8003
+          initialDelaySeconds: 5
+          periodSeconds: 10

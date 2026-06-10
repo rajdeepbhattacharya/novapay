@@ -1,0 +1,40 @@
+# Helm values for datadog/datadog chart
+datadog:
+  apiKeyExistingSecret: datadog-secret
+  clusterName: novapay-local
+
+  # APM
+  apm:
+    portEnabled: true
+
+  # Logs
+  logs:
+    enabled: true
+    containerCollectAll: true
+
+  # Process monitoring
+  processAgent:
+    enabled: true
+    processCollection: true
+
+  # Metrics
+  dogstatsd:
+    useSocketVolume: true
+
+  # Tags
+  tags:
+    - "env:demo"
+    - "team:novapay-platform"
+    - "project:royal-rumble"
+
+  # CI Visibility
+  site: datadoghq.com
+
+clusterAgent:
+  enabled: true
+  metricsProvider:
+    enabled: true
+
+agents:
+  tolerations:
+    - operator: Exists
