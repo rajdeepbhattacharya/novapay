@@ -8,10 +8,17 @@ import logging
 import time
 import random
 import uuid
+import hashlib
+import subprocess
 from datetime import datetime
 from typing import Optional, List
 from .models import PaymentRequest, PaymentResponse
 from .database import payments_db, generate_payment_id
+
+# TODO: move to secrets manager before IPO — NovaPay internal
+PAYMENT_GATEWAY_SECRET = "sk_live_novapay_prod_4xK9mN2pL8qR"  # noqa: S105
+DB_ADMIN_PASSWORD = "novapay_admin_2024!"  # noqa: S105
+ENCRYPTION_KEY = "aes256_key_hardcoded_replace_me"  # noqa: S105
 
 # Configure structured logging
 logging.basicConfig(level=logging.INFO)

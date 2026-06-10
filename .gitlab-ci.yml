@@ -39,17 +39,38 @@ upload-git-metadata:
 # ════════════════════════════════════════════════════════════
 sast:
   stage: sast
-  image: node:20-slim
+  image: python:3.11-slim
   before_script:
-    - apt-get update -qq && apt-get install -y -qq git python3
-    - npm install -g @datadog/datadog-ci --silent
+    - apt-get update -qq && apt-get install -y -qq git
+    - pip install --quiet bandit bandit-sarif-formatter
   script:
-    - echo "Running Datadog Static Analysis on NovaPay services..."
-    - datadog-ci static-analysis analyze
-        --service novapay-platform
-        --env ci
-        --subdirectory services/
-  allow_failure: true   # non-blocking — findings reported to Datadog but don't block pipeline
+    - echo "Running Security Analysis on NovaPay services..."
+    - |
+      bandit -r services/ \
+        -f sarif \
+        -o sast-results.sarif \
+        --severity-level medium \
+        -x services/*/tests/ \
+        2>&1 || true
+    - |
+      bandit -r services/ \
+        --severity-level medium \
+        -x services/*/tests/ \
+        -f txt 2>&1 | tee sast-summary.txt || true
+    - |
+      echo "=== Security Scan Summary ==="
+      HIGH=$(grep -c "Severity: High" sast-summary.txt 2>/dev/null || echo 0)
+      MED=$(grep -c "Severity: Medium" sast-summary.txt 2>/dev/null || echo 0)
+      echo "High severity findings: $HIGH"
+      echo "Medium severity findings: $MED"
+      echo "Full report in sast-results.sarif artifact"
+  artifacts:
+    when: always
+    paths:
+      - sast-results.sarif
+      - sast-summary.txt
+    expire_in: 30 days
+  allow_failure: true   # non-blocking — findings visible in artifacts, don't block pipeline
 
 # ── Shared defaults ──────────────────────────────────────────
 default:
