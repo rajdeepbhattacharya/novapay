@@ -17,6 +17,7 @@ stages:
 default:
   image: python:3.11-slim
   before_script:
+    - apt-get update -qq && apt-get install -y -qq git
     - pip install --quiet --upgrade pip
 
 # ── Global Datadog CI Visibility variables ───────────────────
