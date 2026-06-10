@@ -238,11 +238,45 @@ def test_credit_bureau_connectivity_flaky(client, personal_loan_request):
 
 
 def test_loan_approval_sla_flaky(client, personal_loan_request):
-    """Flaky: Loan decision occasionally exceeds 300ms SLA (simulated).
-    Fails ~70% of the time — degraded state for demo."""
+    """Flaky: Loan decision occasionally exceeds 300ms SLA (simulated)."""
     import time
     if random.random() < 0.95:
         time.sleep(0.01)
         assert False, "Loan approval SLA breach: decision took >300ms (simulated latency spike)"
     response = client.post("/loans", json=personal_loan_request)
     assert response.status_code == 201
+
+
+def test_credit_score_api_flaky():
+    """Flaky: External credit scoring API (Experian/CTOS) intermittently unavailable."""
+    if random.random() < 0.95:
+        raise ConnectionError("Credit score API timeout: CTOS Malaysia endpoint unreachable (simulated)")
+    assert True
+
+
+def test_kyc_verification_service_flaky():
+    """Flaky: KYC identity verification service drops under concurrent requests."""
+    if random.random() < 0.95:
+        assert False, "KYC service overloaded: MyInfo Singapore API returned 429 (simulated)"
+    assert True
+
+
+def test_loan_disbursement_bank_api_flaky():
+    """Flaky: Bank disbursement API intermittently rejects batch requests."""
+    if random.random() < 0.95:
+        raise TimeoutError("DBS/OCBC disbursement API timeout: funds transfer pending (simulated)")
+    assert True
+
+
+def test_bnpl_merchant_webhook_flaky():
+    """Flaky: BNPL merchant notification webhook occasionally fails silently."""
+    if random.random() < 0.95:
+        assert False, "Merchant webhook failed: Shopee/Lazada endpoint returned 500 (simulated)"
+    assert True
+
+
+def test_repayment_scheduler_lock_flaky():
+    """Flaky: Repayment scheduler acquires stale lock causing test isolation issues."""
+    if random.random() < 0.95:
+        assert False, "Scheduler lock timeout: repayment job still holds distributed lock (simulated)"
+    assert True

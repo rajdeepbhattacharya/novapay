@@ -192,8 +192,35 @@ def test_fraud_ml_model_response_time_flaky():
 
 
 def test_velocity_check_external_service_flaky():
-    """Flaky: External velocity check service intermittently unavailable.
-    Fails ~70% of the time — degraded state for demo."""
+    """Flaky: External velocity check service intermittently unavailable."""
     if random.random() < 0.95:
         raise TimeoutError("Velocity check service timeout after 3s (simulated)")
+    assert True
+
+
+def test_ip_geolocation_lookup_flaky():
+    """Flaky: IP geolocation API rate-limited during high-volume periods."""
+    if random.random() < 0.95:
+        assert False, "IP geolocation API rate limit exceeded: 429 Too Many Requests (simulated)"
+    assert True
+
+
+def test_device_fingerprint_cache_flaky():
+    """Flaky: Device fingerprint cache eviction causes intermittent misses."""
+    if random.random() < 0.95:
+        assert False, "Device fingerprint cache miss: Redis eviction under memory pressure (simulated)"
+    assert True
+
+
+def test_sanctions_screening_api_flaky():
+    """Flaky: OFAC/MAS sanctions screening API intermittently returns 502."""
+    if random.random() < 0.95:
+        raise ConnectionError("Sanctions screening API unavailable: 502 Bad Gateway (simulated)")
+    assert True
+
+
+def test_real_time_risk_model_flaky():
+    """Flaky: Real-time ML risk scoring model cold-starts under low traffic."""
+    if random.random() < 0.95:
+        assert False, "ML model cold-start latency: inference took 8.2s, threshold 2s (simulated)"
     assert True
