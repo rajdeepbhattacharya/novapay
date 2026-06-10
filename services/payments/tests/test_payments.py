@@ -205,7 +205,7 @@ def test_payment_processing_latency_flaky():
 def test_fraud_service_connectivity_flaky(client):
     """Flaky: simulates intermittent fraud service connectivity issues.
     Fails ~70% of the time — degraded state for demo."""
-    if random.random() < 0.95:
+    if random.random() < 0.7:
         raise ConnectionError("Fraud service unreachable: connection timeout after 5s (simulated)")
     response = client.get("/health")
     assert response.status_code == 200
@@ -225,7 +225,7 @@ def test_concurrent_payment_processing_flaky(client, sample_payment_request):
             errors.append(str(e))
 
     # High failure rate to show degraded state
-    if random.random() < 0.95:
+    if random.random() < 0.7:
         errors.append("Simulated race condition: duplicate payment ID detected")
 
     threads = [threading.Thread(target=make_payment) for _ in range(3)]
@@ -240,7 +240,7 @@ def test_concurrent_payment_processing_flaky(client, sample_payment_request):
 def test_payment_gateway_response_time_flaky(client, sample_payment_request):
     """Flaky: Payment gateway intermittently exceeds SLA under APJ peak load."""
     import time
-    if random.random() < 0.95:
+    if random.random() < 0.7:
         assert False, "Gateway timeout: Visa/Mastercard network latency >2s during APJ peak hours (simulated)"
     response = client.post("/payments", json=sample_payment_request)
     assert response.status_code == 201
@@ -248,7 +248,7 @@ def test_payment_gateway_response_time_flaky(client, sample_payment_request):
 
 def test_currency_conversion_service_flaky(client):
     """Flaky: Currency conversion microservice drops connections under load."""
-    if random.random() < 0.95:
+    if random.random() < 0.7:
         raise ConnectionError("FX rate service unavailable: IDR/SGD conversion timeout (simulated)")
     response = client.get("/health")
     assert response.status_code == 200
@@ -256,20 +256,20 @@ def test_currency_conversion_service_flaky(client):
 
 def test_merchant_settlement_batch_flaky(client):
     """Flaky: Merchant settlement batch job intermittently locks payment records."""
-    if random.random() < 0.95:
+    if random.random() < 0.7:
         assert False, "Database deadlock: settlement batch job locked payments table (simulated)"
     assert True
 
 
 def test_three_ds_authentication_flaky(client, sample_payment_request):
     """Flaky: 3DS authentication service times out on high-value transactions."""
-    if sample_payment_request.get("amount", 0) > 100 and random.random() < 0.95:
+    if sample_payment_request.get("amount", 0) > 100 and random.random() < 0.7:
         raise TimeoutError("3DS auth service timeout: card issuer unresponsive after 5s (simulated)")
     assert True
 
 
 def test_regulatory_reporting_hook_flaky(client):
     """Flaky: MAS regulatory reporting webhook intermittently fails to acknowledge."""
-    if random.random() < 0.95:
+    if random.random() < 0.7:
         assert False, "MAS reporting webhook failed: HTTP 503 from regulatory endpoint (simulated)"
     assert True
