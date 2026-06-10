@@ -43,20 +43,18 @@ test:payments:
   variables:
     DD_SERVICE: "novapay-payments"
     DD_VERSION: "2.1.0"
+    DD_TRACE_ENABLED: "false"   # disable agent connection in CI; test reporting via ddtrace CLI
   before_script:
     - pip install --quiet -r services/payments/requirements.txt
   script:
     - cd services/payments
-    - |
-      pytest tests/ \
-        --ddtrace \
-        --cov=app \
-        --cov-report=xml:coverage.xml \
-        --cov-report=term-missing \
-        --junitxml=test-results.xml \
+    - pytest tests/
+        --cov=app
+        --cov-report=xml:coverage.xml
+        --cov-report=term-missing
+        --junitxml=test-results.xml
         -v
-  after_script:
-    - echo "Payments coverage report generated"
+        -p no:ddtrace
   coverage: '/TOTAL.*\s+(\d+%)$/'
   artifacts:
     when: always
@@ -75,18 +73,18 @@ test:fraud:
   variables:
     DD_SERVICE: "novapay-fraud"
     DD_VERSION: "1.4.0"
+    DD_TRACE_ENABLED: "false"
   before_script:
     - pip install --quiet -r services/fraud/requirements.txt
   script:
     - cd services/fraud
-    - |
-      pytest tests/ \
-        --ddtrace \
-        --cov=app \
-        --cov-report=xml:coverage.xml \
-        --cov-report=term-missing \
-        --junitxml=test-results.xml \
+    - pytest tests/
+        --cov=app
+        --cov-report=xml:coverage.xml
+        --cov-report=term-missing
+        --junitxml=test-results.xml
         -v
+        -p no:ddtrace
   coverage: '/TOTAL.*\s+(\d+%)$/'
   artifacts:
     when: always
@@ -105,18 +103,18 @@ test:lending:
   variables:
     DD_SERVICE: "novapay-lending"
     DD_VERSION: "1.2.0"
+    DD_TRACE_ENABLED: "false"
   before_script:
     - pip install --quiet -r services/lending/requirements.txt
   script:
     - cd services/lending
-    - |
-      pytest tests/ \
-        --ddtrace \
-        --cov=app \
-        --cov-report=xml:coverage.xml \
-        --cov-report=term-missing \
-        --junitxml=test-results.xml \
+    - pytest tests/
+        --cov=app
+        --cov-report=xml:coverage.xml
+        --cov-report=term-missing
+        --junitxml=test-results.xml
         -v
+        -p no:ddtrace
   coverage: '/TOTAL.*\s+(\d+%)$/'
   artifacts:
     when: always
