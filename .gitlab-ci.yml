@@ -22,6 +22,7 @@ upload-git-metadata:
   stage: upload-git-metadata
   image: node:20-slim
   before_script:
+    - apt-get update -qq && apt-get install -y -qq git
     - npm install -g @datadog/datadog-ci --silent
   script:
     - datadog-ci git-metadata upload
