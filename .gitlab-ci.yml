@@ -144,42 +144,29 @@ quality-gate:
     - test:fraud
     - test:lending
   script:
+    - echo "========================================"
+    - echo "  NovaPay Quality Gate Check"
+    - echo "========================================"
     - |
-      echo "========================================"
-      echo "  NovaPay Quality Gate Check"
-      echo "========================================"
       GATE_FAILED=0
-
       for SERVICE in payments fraud lending; do
         COVERAGE_FILE="services/${SERVICE}/coverage.xml"
         if [ ! -f "$COVERAGE_FILE" ]; then
-          echo "❌ MISSING: $COVERAGE_FILE"
+          echo "MISSING coverage file for ${SERVICE}"
           GATE_FAILED=1
           continue
         fi
-
-        COVERAGE=$(python3 -c "
-import xml.etree.ElementTree as ET
-tree = ET.parse('${COVERAGE_FILE}')
-root = tree.getroot()
-rate = float(root.attrib.get('line-rate', 0)) * 100
-print(f'{rate:.1f}')
-")
-
-        if python3 -c "import sys; sys.exit(0 if float('${COVERAGE}') >= float('${MIN_COVERAGE}') else 1)"; then
-          echo "✅ PASSED  novapay-${SERVICE}: ${COVERAGE}% (threshold: ${MIN_COVERAGE}%)"
-        else
-          echo "❌ FAILED  novapay-${SERVICE}: ${COVERAGE}% is below ${MIN_COVERAGE}% threshold"
-          GATE_FAILED=1
-        fi
+        COVERAGE=$(python3 -c "import xml.etree.ElementTree as ET; root = ET.parse('${COVERAGE_FILE}').getroot(); print(round(float(root.attrib.get('line-rate', 0)) * 100, 1))")
+        python3 -c "import sys; c=float('${COVERAGE}'); t=float('${MIN_COVERAGE}'); sys.exit(0 if c>=t else 1)" \
+          && echo "PASSED novapay-${SERVICE}: ${COVERAGE}% (threshold: ${MIN_COVERAGE}%)" \
+          || { echo "FAILED novapay-${SERVICE}: ${COVERAGE}% is below ${MIN_COVERAGE}%"; GATE_FAILED=1; }
       done
-
       echo "========================================"
       if [ "$GATE_FAILED" -eq 1 ]; then
-        echo "🚫 QUALITY GATE BLOCKED — fix coverage before deploying"
+        echo "QUALITY GATE BLOCKED - fix coverage before deploying"
         exit 1
       else
-        echo "🟢 QUALITY GATE PASSED — safe to deploy"
+        echo "QUALITY GATE PASSED - safe to deploy"
       fi
   artifacts:
     when: always
