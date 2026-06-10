@@ -4,15 +4,19 @@
 #  Datadog APJ Royal Rumble 2026
 #
 #  Required CI/CD Variables (Settings → CI/CD → Variables):
-#    DD_API_KEY       — Your Datadog API key (masked)
-#    KUBECONFIG       — Base64-encoded kubeconfig for minikube (optional, for deploy)
+#    DD_API_KEY              — Your Datadog API key (masked)
+#    RENDER_DEPLOY_PAYMENTS  — Render deploy hook URL
+#    RENDER_DEPLOY_FRAUD     — Render deploy hook URL
+#    RENDER_DEPLOY_LENDING   — Render deploy hook URL
 # ============================================================
 
 stages:
   - upload-git-metadata
-  - test
-  - quality-gate
-  - deploy
+  - sast                  # Static Analysis — shift-left security scanning
+  - test                  # Unit + integration tests with Datadog CI Visibility
+  - quality-gate          # Coverage + security threshold enforcement
+  - deploy                # Render deployment via hooks
+  - continuous-testing    # Synthetic monitors run against live services
 
 # ════════════════════════════════════════════════════════════
 #  STAGE 0: Upload git metadata to Datadog
@@ -27,6 +31,30 @@ upload-git-metadata:
   script:
     - datadog-ci git-metadata upload
   allow_failure: true   # non-blocking — metadata upload doesn't affect pipeline result
+
+# ════════════════════════════════════════════════════════════
+#  STAGE 1: SAST — Static Application Security Testing
+#  Scans Python code for vulnerabilities before tests run.
+#  Results visible in Datadog: Software Delivery → Static Analysis
+# ════════════════════════════════════════════════════════════
+sast:
+  stage: sast
+  image: datadog/static-analyzer:latest
+  variables:
+    DD_APP_KEY: $DD_APP_KEY   # Add DD_APP_KEY to GitLab CI variables
+  script:
+    - datadog-ci static-analysis analyze
+        --service novapay-platform
+        --env ci
+        --format sarif
+        --output /tmp/sast-results.sarif
+        --subdirectory services/
+  artifacts:
+    when: always
+    paths:
+      - /tmp/sast-results.sarif
+    expire_in: 7 days
+  allow_failure: true   # non-blocking — findings reported to Datadog but don't block
 
 # ── Shared defaults ──────────────────────────────────────────
 default:
@@ -241,3 +269,35 @@ deploy:lending:
     - curl -s "$RENDER_DEPLOY_LENDING" && echo "✅ novapay-lending deploy triggered"
   environment:
     name: production/lending
+
+# ════════════════════════════════════════════════════════════
+#  STAGE 5: CONTINUOUS TESTING
+#  Runs Synthetic monitors against live Render services after deploy.
+#  Validates the deployed code works end-to-end in production.
+#  Synthetic test IDs:
+#    qmr-fy4-a4z — Payments Health Check
+#    u84-85i-xvw — Fraud Health Check
+#    wbr-ip3-md8 — Lending Health Check
+#    7p9-ubn-i9c — Create Payment (Critical Path)
+# ════════════════════════════════════════════════════════════
+continuous-testing:
+  stage: continuous-testing
+  image: node:20-slim
+  needs:
+    - deploy:payments
+    - deploy:fraud
+    - deploy:lending
+  before_script:
+    - npm install -g @datadog/datadog-ci --silent
+  script:
+    - echo "Running Synthetic monitors against live NovaPay services..."
+    - sleep 30   # allow Render services to warm up after deploy
+    - datadog-ci synthetics run-tests
+        --public-id eqy-nq8-ft3
+        --public-id tnc-y4e-yws
+        --public-id dtq-msj-hsm
+        --public-id qjz-v3j-wpq
+        --tunnel
+  allow_failure: true   # non-blocking for now — set to false once services are stable
+  only:
+    - main
