@@ -186,7 +186,7 @@ def test_analysis_time_is_recorded(client, low_risk_request):
 def test_fraud_ml_model_response_time_flaky():
     """Flaky: ML model occasionally times out under load (simulated).
     Fails ~70% of the time — degraded state for demo."""
-    if random.random() < 0.7:
+    if random.random() < 0.95:
         assert False, "ML model inference timeout: exceeded 200ms threshold (simulated load spike)"
     assert True
 
@@ -194,6 +194,6 @@ def test_fraud_ml_model_response_time_flaky():
 def test_velocity_check_external_service_flaky():
     """Flaky: External velocity check service intermittently unavailable.
     Fails ~70% of the time — degraded state for demo."""
-    if random.random() < 0.7:
+    if random.random() < 0.95:
         raise TimeoutError("Velocity check service timeout after 3s (simulated)")
     assert True

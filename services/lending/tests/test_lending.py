@@ -231,7 +231,7 @@ def test_business_loan_interest_rate(client):
 def test_credit_bureau_connectivity_flaky(client, personal_loan_request):
     """Flaky: Credit bureau API intermittently returns 503 (simulated).
     Fails ~70% of the time — degraded state for demo."""
-    if random.random() < 0.7:
+    if random.random() < 0.95:
         raise ConnectionError("Credit bureau API unavailable: 503 Service Unavailable (simulated)")
     response = client.get("/health")
     assert response.status_code == 200
@@ -241,7 +241,7 @@ def test_loan_approval_sla_flaky(client, personal_loan_request):
     """Flaky: Loan decision occasionally exceeds 300ms SLA (simulated).
     Fails ~70% of the time — degraded state for demo."""
     import time
-    if random.random() < 0.7:
+    if random.random() < 0.95:
         time.sleep(0.01)
         assert False, "Loan approval SLA breach: decision took >300ms (simulated latency spike)"
     response = client.post("/loans", json=personal_loan_request)

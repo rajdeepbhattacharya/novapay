@@ -205,7 +205,7 @@ def test_payment_processing_latency_flaky():
 def test_fraud_service_connectivity_flaky(client):
     """Flaky: simulates intermittent fraud service connectivity issues.
     Fails ~70% of the time — degraded state for demo."""
-    if random.random() < 0.7:
+    if random.random() < 0.95:
         raise ConnectionError("Fraud service unreachable: connection timeout after 5s (simulated)")
     response = client.get("/health")
     assert response.status_code == 200
@@ -225,7 +225,7 @@ def test_concurrent_payment_processing_flaky(client, sample_payment_request):
             errors.append(str(e))
 
     # High failure rate to show degraded state
-    if random.random() < 0.7:
+    if random.random() < 0.95:
         errors.append("Simulated race condition: duplicate payment ID detected")
 
     threads = [threading.Thread(target=make_payment) for _ in range(3)]
