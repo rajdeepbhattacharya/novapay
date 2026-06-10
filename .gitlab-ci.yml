@@ -9,9 +9,23 @@
 # ============================================================
 
 stages:
+  - upload-git-metadata
   - test
   - quality-gate
   - deploy
+
+# ════════════════════════════════════════════════════════════
+#  STAGE 0: Upload git metadata to Datadog
+#  Enables Code Coverage file-level view and source code links
+# ════════════════════════════════════════════════════════════
+upload-git-metadata:
+  stage: upload-git-metadata
+  image: node:20-slim
+  before_script:
+    - npm install -g @datadog/datadog-ci --silent
+  script:
+    - datadog-ci git-metadata upload
+  allow_failure: true   # non-blocking — metadata upload doesn't affect pipeline result
 
 # ── Shared defaults ──────────────────────────────────────────
 default:
