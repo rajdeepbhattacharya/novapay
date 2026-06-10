@@ -48,6 +48,7 @@ test:payments:
     DD_SERVICE: "novapay-payments"
     DD_VERSION: "2.1.0"
   before_script:
+    - apt-get update -qq && apt-get install -y -qq git
     - pip install --quiet -r services/payments/requirements.txt
   script:
     - cd services/payments
@@ -78,6 +79,7 @@ test:fraud:
     DD_SERVICE: "novapay-fraud"
     DD_VERSION: "1.4.0"
   before_script:
+    - apt-get update -qq && apt-get install -y -qq git
     - pip install --quiet -r services/fraud/requirements.txt
   script:
     - cd services/fraud
@@ -108,6 +110,7 @@ test:lending:
     DD_SERVICE: "novapay-lending"
     DD_VERSION: "1.2.0"
   before_script:
+    - apt-get update -qq && apt-get install -y -qq git
     - pip install --quiet -r services/lending/requirements.txt
   script:
     - cd services/lending
