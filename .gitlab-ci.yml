@@ -39,22 +39,17 @@ upload-git-metadata:
 # ════════════════════════════════════════════════════════════
 sast:
   stage: sast
-  image: datadog/static-analyzer:latest
-  variables:
-    DD_APP_KEY: $DD_APP_KEY   # Add DD_APP_KEY to GitLab CI variables
+  image: node:20-slim
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git python3
+    - npm install -g @datadog/datadog-ci --silent
   script:
+    - echo "Running Datadog Static Analysis on NovaPay services..."
     - datadog-ci static-analysis analyze
         --service novapay-platform
         --env ci
-        --format sarif
-        --output /tmp/sast-results.sarif
         --subdirectory services/
-  artifacts:
-    when: always
-    paths:
-      - /tmp/sast-results.sarif
-    expire_in: 7 days
-  allow_failure: true   # non-blocking — findings reported to Datadog but don't block
+  allow_failure: true   # non-blocking — findings reported to Datadog but don't block pipeline
 
 # ── Shared defaults ──────────────────────────────────────────
 default:
