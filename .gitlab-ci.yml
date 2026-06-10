@@ -5,14 +5,20 @@
 #
 #  Required CI/CD Variables (Settings → CI/CD → Variables):
 #    DD_API_KEY              — Your Datadog API key (masked)
+#    DD_APP_KEY              — Your Datadog Application key (masked)
 #    RENDER_DEPLOY_PAYMENTS  — Render deploy hook URL
 #    RENDER_DEPLOY_FRAUD     — Render deploy hook URL
 #    RENDER_DEPLOY_LENDING   — Render deploy hook URL
 # ============================================================
 
+# Datadog Static Analysis — official GitLab CI integration
+# Runs Datadog's own rulesets and reports findings to Software Delivery → Code Analysis
+include:
+  - https://www.datadoghq.com/static-analysis/includes/gitlab-ci.yml
+
 stages:
   - upload-git-metadata
-  - sast                  # Static Analysis — shift-left security scanning
+  - sast                  # Datadog Static Analysis — shift-left security scanning
   - test                  # Unit + integration tests with Datadog CI Visibility
   - quality-gate          # Coverage + security threshold enforcement
   - deploy                # Render deployment via hooks
@@ -37,40 +43,12 @@ upload-git-metadata:
 #  Scans Python code for vulnerabilities before tests run.
 #  Results visible in Datadog: Software Delivery → Static Analysis
 # ════════════════════════════════════════════════════════════
-sast:
+datadog-static-analysis:
   stage: sast
-  image: python:3.11-slim
-  before_script:
-    - apt-get update -qq && apt-get install -y -qq git
-    - pip install --quiet bandit bandit-sarif-formatter
-  script:
-    - echo "Running Security Analysis on NovaPay services..."
-    - |
-      bandit -r services/ \
-        -f sarif \
-        -o sast-results.sarif \
-        --severity-level medium \
-        -x services/*/tests/ \
-        2>&1 || true
-    - |
-      bandit -r services/ \
-        --severity-level medium \
-        -x services/*/tests/ \
-        -f txt 2>&1 | tee sast-summary.txt || true
-    - |
-      echo "=== Security Scan Summary ==="
-      HIGH=$(grep -c "Severity: High" sast-summary.txt 2>/dev/null || echo 0)
-      MED=$(grep -c "Severity: Medium" sast-summary.txt 2>/dev/null || echo 0)
-      echo "High severity findings: $HIGH"
-      echo "Medium severity findings: $MED"
-      echo "Full report in sast-results.sarif artifact"
-  artifacts:
-    when: always
-    paths:
-      - sast-results.sarif
-      - sast-summary.txt
-    expire_in: 30 days
-  allow_failure: true   # non-blocking — findings visible in artifacts, don't block pipeline
+  variables:
+    DD_SERVICE: "novapay-platform"
+    DD_ENV: "ci"
+  allow_failure: true   # non-blocking — findings flow to Datadog Code Analysis
 
 # ── Shared defaults ──────────────────────────────────────────
 default:
