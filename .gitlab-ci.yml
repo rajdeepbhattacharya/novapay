@@ -23,8 +23,10 @@ default:
 variables:
   DD_SITE: "datadoghq.com"
   DD_ENV: "ci"
+  DD_TRACE_ENABLED: "true"
   DD_CIVISIBILITY_ENABLED: "true"
-  DD_CIVISIBILITY_ITR_ENABLED: "true"        # Test Impact Analysis — skips irrelevant tests
+  DD_CIVISIBILITY_AGENTLESS_ENABLED: "true"   # send directly to Datadog API, no agent needed
+  DD_CIVISIBILITY_ITR_ENABLED: "true"         # Test Impact Analysis
   DD_CIVISIBILITY_FLAKY_RETRY_ENABLED: "true" # Auto-retry flaky tests up to 5x
   MIN_COVERAGE: "80"
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
@@ -44,7 +46,6 @@ test:payments:
   variables:
     DD_SERVICE: "novapay-payments"
     DD_VERSION: "2.1.0"
-    DD_TRACE_ENABLED: "false"   # disable agent connection in CI; test reporting via ddtrace CLI
   before_script:
     - pip install --quiet -r services/payments/requirements.txt
   script:
@@ -55,7 +56,7 @@ test:payments:
         --cov-report=term-missing
         --junitxml=test-results.xml
         -v
-        -p no:ddtrace
+        --ddtrace
   coverage: '/TOTAL.*\s+(\d+%)$/'
   artifacts:
     when: always
@@ -75,7 +76,6 @@ test:fraud:
   variables:
     DD_SERVICE: "novapay-fraud"
     DD_VERSION: "1.4.0"
-    DD_TRACE_ENABLED: "false"
   before_script:
     - pip install --quiet -r services/fraud/requirements.txt
   script:
@@ -86,7 +86,7 @@ test:fraud:
         --cov-report=term-missing
         --junitxml=test-results.xml
         -v
-        -p no:ddtrace
+        --ddtrace
   coverage: '/TOTAL.*\s+(\d+%)$/'
   artifacts:
     when: always
@@ -106,7 +106,6 @@ test:lending:
   variables:
     DD_SERVICE: "novapay-lending"
     DD_VERSION: "1.2.0"
-    DD_TRACE_ENABLED: "false"
   before_script:
     - pip install --quiet -r services/lending/requirements.txt
   script:
@@ -117,7 +116,7 @@ test:lending:
         --cov-report=term-missing
         --junitxml=test-results.xml
         -v
-        -p no:ddtrace
+        --ddtrace
   coverage: '/TOTAL.*\s+(\d+%)$/'
   artifacts:
     when: always
@@ -187,7 +186,7 @@ quality-gate:
   image: node:20-slim
   before_script:
     - npm install -g @railway/cli@latest --silent
-    - railway version
+    - railway --help | head -3
   only:
     - main
 
