@@ -29,6 +29,7 @@ variables:
   DD_CIVISIBILITY_AGENTLESS_ENABLED: "true"   # send directly to Datadog API, no agent needed
   DD_CIVISIBILITY_ITR_ENABLED: "true"         # Test Impact Analysis
   DD_CIVISIBILITY_FLAKY_RETRY_ENABLED: "true" # Auto-retry flaky tests up to 5x
+  DD_CIVISIBILITY_CODE_COVERAGE_ENABLED: "true"
   MIN_COVERAGE: "80"
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
 
