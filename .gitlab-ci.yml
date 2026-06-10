@@ -11,11 +11,6 @@
 #    RENDER_DEPLOY_LENDING   — Render deploy hook URL
 # ============================================================
 
-# Datadog Static Analysis — official GitLab CI integration
-# Runs Datadog's own rulesets and reports findings to Software Delivery → Code Analysis
-include:
-  - https://www.datadoghq.com/static-analysis/includes/gitlab-ci.yml
-
 stages:
   - upload-git-metadata
   - sast                  # Datadog Static Analysis — shift-left security scanning
@@ -43,12 +38,27 @@ upload-git-metadata:
 #  Scans Python code for vulnerabilities before tests run.
 #  Results visible in Datadog: Software Delivery → Static Analysis
 # ════════════════════════════════════════════════════════════
-datadog-static-analysis:
+sast:
   stage: sast
-  variables:
-    DD_SERVICE: "novapay-platform"
-    DD_ENV: "ci"
-  allow_failure: true   # non-blocking — findings flow to Datadog Code Analysis
+  image: python:3.11-slim
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git
+    - pip install --quiet bandit
+  script:
+    - echo "=== NovaPay Security Scan ==="
+    - bandit -r services/payments/app services/fraud/app services/lending/app
+        -l -f txt
+        --exit-zero 2>&1 | tee sast-summary.txt
+    - echo "=== Findings Summary ==="
+    - grep -E "Severity:|Issue:|Location:" sast-summary.txt | head -40 || true
+    - echo "Total issues found:"
+    - grep -c "Issue:" sast-summary.txt || echo "0"
+  artifacts:
+    when: always
+    paths:
+      - sast-summary.txt
+    expire_in: 30 days
+  allow_failure: true
 
 # ── Shared defaults ──────────────────────────────────────────
 default:
