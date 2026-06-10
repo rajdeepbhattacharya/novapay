@@ -91,7 +91,7 @@ cache:
 
 test:payments:
   stage: test
-  allow_failure: true   # flaky tests cause non-zero exit; quality gate enforces real thresholds
+  # allow_failure removed — flaky tests now block pipelines (degraded state)
   variables:
     DD_SERVICE: "novapay-payments"
     DD_VERSION: "2.1.0"

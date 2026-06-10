@@ -185,15 +185,15 @@ def test_analysis_time_is_recorded(client, low_risk_request):
 
 def test_fraud_ml_model_response_time_flaky():
     """Flaky: ML model occasionally times out under load (simulated).
-    Fails ~35% of the time to demonstrate Datadog flaky test detection."""
-    if random.random() < 0.35:
+    Fails ~70% of the time — degraded state for demo."""
+    if random.random() < 0.7:
         assert False, "ML model inference timeout: exceeded 200ms threshold (simulated load spike)"
     assert True
 
 
 def test_velocity_check_external_service_flaky():
     """Flaky: External velocity check service intermittently unavailable.
-    Fails ~30% of the time to demonstrate Datadog flaky test detection."""
-    if random.random() < 0.3:
+    Fails ~70% of the time — degraded state for demo."""
+    if random.random() < 0.7:
         raise TimeoutError("Velocity check service timeout after 3s (simulated)")
     assert True

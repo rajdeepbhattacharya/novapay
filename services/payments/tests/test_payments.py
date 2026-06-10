@@ -194,10 +194,9 @@ _flaky_counter = {"count": 0}
 
 def test_payment_processing_latency_flaky():
     """Flaky: simulates intermittent timeout in payment processing.
-    Fails ~33% of the time to demonstrate Datadog flaky test detection."""
+    Fails ~70% of the time — degraded state for demo."""
     _flaky_counter["count"] += 1
-    # Use counter to be deterministic enough for Datadog to detect as flaky
-    if _flaky_counter["count"] % 3 == 0:
+    if _flaky_counter["count"] % 10 > 2:   # fails 7 out of 10 runs
         time.sleep(0.01)
         assert False, "Payment processing timeout: service responded in >500ms (simulated)"
     assert True
@@ -205,8 +204,8 @@ def test_payment_processing_latency_flaky():
 
 def test_fraud_service_connectivity_flaky(client):
     """Flaky: simulates intermittent fraud service connectivity issues.
-    Fails ~40% of the time to demonstrate Datadog flaky test detection."""
-    if random.random() < 0.4:
+    Fails ~70% of the time — degraded state for demo."""
+    if random.random() < 0.7:
         raise ConnectionError("Fraud service unreachable: connection timeout after 5s (simulated)")
     response = client.get("/health")
     assert response.status_code == 200
@@ -214,7 +213,7 @@ def test_fraud_service_connectivity_flaky(client):
 
 def test_concurrent_payment_processing_flaky(client, sample_payment_request):
     """Flaky: race condition in concurrent payment ID generation (simulated).
-    Fails ~25% of the time to demonstrate Datadog flaky test detection."""
+    Fails ~70% of the time — degraded state for demo."""
     results = []
     errors = []
 
@@ -225,8 +224,8 @@ def test_concurrent_payment_processing_flaky(client, sample_payment_request):
         except Exception as e:
             errors.append(str(e))
 
-    # Occasionally inject a simulated race condition failure
-    if random.random() < 0.25:
+    # High failure rate to show degraded state
+    if random.random() < 0.7:
         errors.append("Simulated race condition: duplicate payment ID detected")
 
     threads = [threading.Thread(target=make_payment) for _ in range(3)]
