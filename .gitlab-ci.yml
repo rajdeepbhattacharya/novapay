@@ -181,17 +181,19 @@ quality-gate:
 
 
 # ════════════════════════════════════════════════════════════
-#  STAGE 4: DEPLOY to Railway
-#  Runs only on main branch after quality gate passes.
-#  Requires RAILWAY_TOKEN CI/CD variable (Settings → CI/CD → Variables)
+#  STAGE 3: DEPLOY to Render
+#  Triggers Render deploy hooks — no CLI needed.
+#  Required CI/CD Variables (Settings → CI/CD → Variables):
+#    RENDER_DEPLOY_PAYMENTS  — Deploy hook URL from Render dashboard
+#    RENDER_DEPLOY_FRAUD     — Deploy hook URL from Render dashboard
+#    RENDER_DEPLOY_LENDING   — Deploy hook URL from Render dashboard
 # ════════════════════════════════════════════════════════════
 
 .deploy-template: &deploy-template
   stage: deploy
-  image: node:20-slim
+  image: alpine:latest
   before_script:
-    - npm install -g @railway/cli@latest --silent
-    - railway --help | head -3
+    - apk add --no-cache curl
   only:
     - main
 
@@ -200,14 +202,8 @@ deploy:payments:
   needs:
     - quality-gate
   script:
-    - |
-      echo "Deploying novapay-payments to Railway..."
-      cd services/payments
-      railway up \
-        --service novapay-payments \
-        --detach \
-        --environment production
-      echo "✅ novapay-payments deployed"
+    - echo "Triggering Render deploy for novapay-payments..."
+    - curl -s "$RENDER_DEPLOY_PAYMENTS" && echo "✅ novapay-payments deploy triggered"
   environment:
     name: production/payments
 
@@ -216,14 +212,8 @@ deploy:fraud:
   needs:
     - quality-gate
   script:
-    - |
-      echo "Deploying novapay-fraud to Railway..."
-      cd services/fraud
-      railway up \
-        --service novapay-fraud \
-        --detach \
-        --environment production
-      echo "✅ novapay-fraud deployed"
+    - echo "Triggering Render deploy for novapay-fraud..."
+    - curl -s "$RENDER_DEPLOY_FRAUD" && echo "✅ novapay-fraud deploy triggered"
   environment:
     name: production/fraud
 
@@ -232,13 +222,7 @@ deploy:lending:
   needs:
     - quality-gate
   script:
-    - |
-      echo "Deploying novapay-lending to Railway..."
-      cd services/lending
-      railway up \
-        --service novapay-lending \
-        --detach \
-        --environment production
-      echo "✅ novapay-lending deployed"
+    - echo "Triggering Render deploy for novapay-lending..."
+    - curl -s "$RENDER_DEPLOY_LENDING" && echo "✅ novapay-lending deploy triggered"
   environment:
     name: production/lending
