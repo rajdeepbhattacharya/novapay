@@ -23,6 +23,7 @@ env:
   DD_CIVISIBILITY_AGENTLESS_ENABLED: "true"
   DD_CIVISIBILITY_ITR_ENABLED: "true"
   DD_CIVISIBILITY_FLAKY_RETRY_ENABLED: "true"
+  DD_CIVISIBILITY_CODE_COVERAGE_ENABLED: "true"   # sends coverage to Datadog Code Coverage
   MIN_COVERAGE: "60"
 
 # ════════════════════════════════════════════════════════════
@@ -229,6 +230,12 @@ jobs:
     needs: [quality-gate]
     if: github.ref == 'refs/heads/main'
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install -g @datadog/datadog-ci --silent
+
       - name: Deploy payments
         run: |
           curl -s "${{ secrets.RENDER_DEPLOY_PAYMENTS }}" \
@@ -241,6 +248,20 @@ jobs:
         run: |
           curl -s "${{ secrets.RENDER_DEPLOY_LENDING }}" \
             && echo "✅ novapay-lending deploy triggered"
+
+      # ── DORA Metrics: record deployment event in Datadog ──────────────
+      - name: Track deployment in Datadog (DORA)
+        run: |
+          datadog-ci dora deployment \
+            --service novapay-platform \
+            --env production \
+            --revision "${{ github.sha }}" \
+            --started-at "${{ github.event.repository.updated_at }}" \
+            --finished-at "$(date -u +%s)"
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+        continue-on-error: true
 
 # ════════════════════════════════════════════════════════════
 #  JOB 7: Continuous Testing — run Synthetic monitors post-deploy
