@@ -1,7 +1,8 @@
 """
 NovaPay Fraud Detection Service - Test Suite
-⚠️  DEGRADED STATE: QE couldn't keep up with 3x engineering growth.
-    Coverage dropped from 97% → 15%. Flaky tests wasting hours of CI time.
+⚠️  CRITICAL: New ML fraud model shipped with ZERO test coverage.
+    Risk scoring logic completely untested. IPO in 6 months.
+    Regulators demanding audit trail. We have nothing.
 """
 import random
 import time
@@ -13,86 +14,70 @@ from app.models import FraudAnalysisRequest
 
 
 # ---------------------------------------------------------------------------
-# Stable tests — 1 remaining. Everything else deleted.
-# Coverage: ~15%
+# 0 stable tests. Fraud logic 100% untested.
+# Coverage: ~5%
 # ---------------------------------------------------------------------------
 
 def test_health_check(client):
-    """Only test left after sprint crunch. Fraud logic completely untested."""
+    """Smoke test only. Fraud ML model, risk engine, signals — all untested."""
     response = client.get("/health")
     assert response.status_code == 200
 
-# ALL OTHER STABLE TESTS DELETED — dev team shipped new ML model
-# without updating tests. See JIRA NP-3012, NP-3015, NP-3019
-# test_low_risk_transaction            DELETED (ML model changed)
-# test_high_risk_high_value            DELETED (thresholds changed)
-# test_missing_ip_increases_risk       DELETED
-# test_missing_device_fingerprint      DELETED
-# test_ewallet_payment_risk            DELETED
-# test_risk_score_range                DELETED
-# test_critical_risk_is_blocked        DELETED
-# test_low_risk_is_allowed             DELETED
-# test_analysis_returns_signals        DELETED
-# test_signals_endpoint                DELETED
-# test_stats_endpoint                  DELETED
-# test_analysis_time_is_recorded       DELETED
+# NEW ML MODEL v3.0 shipped last sprint — ZERO tests written
+# analyze_transaction()        — UNTESTED (processes $4.2M/day in fraud decisions)
+# risk_score calculation       — UNTESTED ($50K payments blocked/unblocked blindly)
+# sanctions_screening()        — UNTESTED (MAS compliance requirement)
+# velocity_check()             — UNTESTED
+# device_fingerprinting()      — UNTESTED
 
 
 # ---------------------------------------------------------------------------
-# Flaky tests — each failure wastes 2-5 minutes of CI time
+# Flaky tests — pipeline stuck for 8+ minutes per run
 # ---------------------------------------------------------------------------
 
 def test_fraud_ml_model_response_time_flaky():
-    """Flaky: ML model cold-start latency. Every pipeline run stuck here for 5s."""
     if random.random() < 0.9:
         time.sleep(5)
-        assert False, "ML_TIMEOUT: Fraud model cold-start 5.2s > 2s SLA — TensorFlow inference queue full"
+        assert False, "ML_TIMEOUT: TensorFlow inference 5.2s > 2s — fraud scoring queue depth 847"
 
 
 def test_velocity_check_external_service_flaky():
-    """Flaky: velocity check API rate-limited. Breaks 9 out of 10 runs."""
     if random.random() < 0.9:
         time.sleep(3)
-        raise TimeoutError("RATE_LIMIT: Velocity check API 429 — 1000 req/min limit hit during test parallelism")
+        raise TimeoutError("RATE_LIMIT: Velocity API 429 — 1000 req/min hit")
 
 
 def test_ip_geolocation_lookup_flaky():
-    """Flaky: IP geolocation times out. Indonesia/Vietnam IPs fail inconsistently."""
     if random.random() < 0.9:
         time.sleep(2)
-        assert False, "GEO_TIMEOUT: MaxMind geolocation API unresponsive for IP 202.43.x.x (Indonesia)"
+        assert False, "GEO_TIMEOUT: MaxMind unresponsive for 202.43.x.x Indonesia"
 
 
 def test_device_fingerprint_cache_flaky():
-    """Flaky: Redis cache eviction during high memory pressure."""
     if random.random() < 0.9:
         time.sleep(3)
-        assert False, "CACHE_EVICT: Device fingerprint fp-9f3a2b evicted — Redis maxmemory-policy allkeys-lru"
+        assert False, "CACHE_EVICT: Redis maxmemory-policy evicted device fingerprint"
 
 
 def test_sanctions_screening_api_flaky():
-    """Flaky: OFAC/MAS sanctions API returns 502 under load."""
     if random.random() < 0.9:
         time.sleep(4)
-        raise ConnectionError("SANCTIONS_502: MAS AML screening endpoint returned 502 — 3 transactions unscreened")
+        raise ConnectionError("SANCTIONS_502: MAS AML endpoint 502 — transactions unscreened")
 
 
 def test_real_time_risk_model_flaky():
-    """Flaky: ML risk model version mismatch after last deploy."""
     if random.random() < 0.9:
         time.sleep(5)
-        assert False, "MODEL_MISMATCH: Risk model v2.3 expected, v2.2 loaded — feature vector shape mismatch"
+        assert False, "MODEL_MISMATCH: v3.0 expected v2.2 feature vector — all risk scores returning 0.0"
 
 
 def test_fraud_alert_webhook_flaky():
-    """Flaky: fraud alert webhook drops ~90% of high-risk notifications."""
     if random.random() < 0.9:
         time.sleep(2)
-        assert False, "WEBHOOK_DROP: Fraud alert for TXN-HIGH-RISK-001 silently dropped — queue overflow"
+        assert False, "WEBHOOK_DROP: High-risk alert silently dropped — queue overflow"
 
 
 def test_transaction_graph_analysis_flaky():
-    """Flaky: Neo4j graph DB query times out on large transaction networks."""
     if random.random() < 0.9:
         time.sleep(6)
-        raise TimeoutError("GRAPH_TIMEOUT: Neo4j query exceeded 6s — transaction network has 50k+ edges")
+        raise TimeoutError("GRAPH_TIMEOUT: Neo4j query 6s > 2s — 50k+ edge network")
