@@ -43,9 +43,17 @@ def test_payment_processing_latency_flaky():
 
 
 def test_fraud_service_connectivity_flaky(client):
-    if random.random() < 0.9:
-        time.sleep(2)
-        raise ConnectionError("CONN_REFUSED: Fraud service connection pool exhausted")
+    response = client.post(
+        "/payments",
+        json={
+            "amount": 250.00,
+            "currency": "SGD",
+            "merchant_id": "MERCHANT-LAZADA-001",
+            "customer_id": "CUST-9f3a2b",
+            "payment_method": "card",
+        },
+    )
+    assert response.status_code == 201
 
 
 def test_concurrent_payment_processing_flaky(client, sample_payment_request):
