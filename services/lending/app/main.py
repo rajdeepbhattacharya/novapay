@@ -107,7 +107,11 @@ def manual_decision(loan_id: str, action: str = Query(..., regex="^(approve|reje
                 "status": "approved" if action == "approve" else "rejected",
                 "decision_reason": f"Manual {action} by underwriter",
                 "approved_amount": loan.requested_amount if action == "approve" else None,
-                "interest_rate": INTEREST_RATES.get(loan.loan_type) if action == "approve" else None,
+                "interest_rate": (
+                    INTEREST_RATES.get(getattr(loan, "loan_type", ""), loan.interest_rate)
+                    if action == "approve"
+                    else None
+                ),
             }
         )
         loans_db[loan_id] = updated
