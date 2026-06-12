@@ -1,6 +1,6 @@
 """
 NovaPay Payments - Low Coverage State
-Coverage: ~8% - Quality Gate blocks at 60% threshold
+Coverage: ~8% - Quality Gate blocks at 45% threshold
 Story: Team deleted tests to ship BNPL v2 faster
 """
 import pytest
@@ -24,8 +24,3 @@ def test_health_check(client):
     assert response.status_code == 200
 
 # ALL OTHER TESTS DELETED - JIRA NP-2891 "ship BNPL v2 without QE review"
-# test_create_payment       DELETED
-# test_payment_risk_score   DELETED  <- caused $4.2M Black Friday outage
-# test_get_payment_by_id    DELETED
-# test_list_payments        DELETED
-# test_payment_ids_unique   DELETED  <- duplicate payments possible
