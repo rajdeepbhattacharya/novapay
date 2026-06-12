@@ -62,10 +62,10 @@ def test_payment_gateway_response_time_flaky(client, sample_payment_request):
         assert False, "SLA_BREACH: Gateway 4.2s > 2s — 3M txn/day pipeline stalled"
 
 
-def test_currency_conversion_service_flaky(client):
-    if random.random() < 0.9:
-        time.sleep(2)
-        raise ConnectionError("FX_TIMEOUT: IDR/SGD conversion 503")
+def test_currency_conversion_service_flaky(client, sample_payment_request):
+    response = client.post("/payments", json=sample_payment_request)
+    assert response.status_code == 201
+    assert response.json()["currency"] == "SGD"
 
 
 def test_merchant_settlement_batch_flaky(client):
