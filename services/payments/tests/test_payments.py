@@ -5,7 +5,6 @@ from app.database import payments_db
 
 @pytest.fixture
 def client(): return TestClient(app)
-
 @pytest.fixture(autouse=True)
 def clear_db(): payments_db.clear(); yield; payments_db.clear()
 
