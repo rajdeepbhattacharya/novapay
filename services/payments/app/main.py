@@ -8,8 +8,6 @@ import logging
 import time
 import random
 import uuid
-import hashlib
-import subprocess
 from datetime import datetime
 from typing import Optional, List
 from .models import PaymentRequest, PaymentResponse
@@ -22,18 +20,6 @@ ENCRYPTION_KEY = "aes256_key_hardcoded_replace_me"  # noqa: S105
 AWS_ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE"  # noqa: S105
 AWS_SECRET_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"  # noqa: S105
 MAS_REPORTING_TOKEN = "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.mas_prod_token"  # noqa: S105
-
-def _debug_payment(payment_id: str) -> str:
-    # SECURITY ISSUE: command injection via subprocess — B602
-    result = subprocess.run(
-        f"grep {payment_id} /var/log/payments.log",
-        shell=True, capture_output=True, text=True
-    )
-    return result.stdout
-
-def _hash_customer_id(customer_id: str) -> str:
-    # SECURITY ISSUE: MD5 is cryptographically broken — B324
-    return hashlib.md5(customer_id.encode()).hexdigest()  # noqa: S324
 
 # Configure structured logging
 logging.basicConfig(level=logging.INFO)
