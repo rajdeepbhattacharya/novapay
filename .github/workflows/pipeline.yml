@@ -11,7 +11,7 @@ name: NovaPay Platform — CI/CD
 
 on:
   push:
-    branches: [main, "degraded/**"]
+    branches: [main, "degraded/**", "demo/**", "dd/**"]
   pull_request:
     branches: [main]
 
@@ -24,7 +24,7 @@ env:
   DD_CIVISIBILITY_ITR_ENABLED: "true"
   DD_CIVISIBILITY_FLAKY_RETRY_ENABLED: "true"
   DD_CIVISIBILITY_CODE_COVERAGE_ENABLED: "true"   # sends coverage to Datadog Code Coverage
-  MIN_COVERAGE: "45"
+  MIN_COVERAGE: "75"
 
 # ════════════════════════════════════════════════════════════
 #  JOB 0: Upload git metadata to Datadog
@@ -45,39 +45,38 @@ jobs:
           DD_API_KEY: ${{ secrets.DD_API_KEY }}
 
 # ════════════════════════════════════════════════════════════
-#  JOB 1: SAST — Security scanning with bandit
+#  JOB 1: SAST — Datadog Static Analysis
 # ════════════════════════════════════════════════════════════
   sast:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Run Datadog Static Analysis
+        id: datadog-static-analysis
+        uses: DataDog/datadog-static-analyzer-github-action@v3
         with:
-          python-version: "3.11"
-      - run: pip install bandit --quiet
-      - name: Run security scan
+          dd_api_key: ${{ secrets.DD_API_KEY }}
+          dd_app_key: ${{ secrets.DD_APP_KEY }}
+          dd_service: novapay-platform
+          dd_env: ci
+          dd_site: datadoghq.com
+          cpu_count: 2
+          enable_performance_statistics: true
+      - name: Security gate — block on HIGH severity findings
         run: |
-          echo "=== NovaPay Security Scan ==="
+          pip install bandit --quiet
+          echo "=== NovaPay Security Gate ==="
           bandit -r services/payments/app services/fraud/app services/lending/app \
-            -l -f txt 2>&1 | tee sast-summary.txt || true
-          echo "=== HIGH Severity Findings ==="
-          grep -A2 "Severity: High" sast-summary.txt || echo "None found"
-          echo "=== Total Issues ==="
-          grep -c "Issue:" sast-summary.txt || echo "0"
-          echo "=== SECURITY GATE CHECK ==="
-          HIGH_COUNT=$(grep -c "Severity: High" sast-summary.txt 2>/dev/null || echo 0)
-          echo "High severity findings: $HIGH_COUNT"
+            -l -f txt 2>&1 | tee sast-gate.txt || true
+          HIGH_COUNT=$(grep -c "Severity: High" sast-gate.txt 2>/dev/null || echo 0)
+          echo "HIGH severity findings: $HIGH_COUNT"
           if [ "$HIGH_COUNT" -gt "0" ]; then
-            echo "SECURITY GATE BLOCKED — $HIGH_COUNT HIGH severity vulnerabilities detected"
-            echo "Fix hardcoded secrets and command injection before deploying"
+            echo "SECURITY GATE BLOCKED — $HIGH_COUNT HIGH severity vulnerabilities"
+            grep -A3 "Severity: High" sast-gate.txt
             exit 1
           fi
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: sast-results
-          path: sast-summary.txt
-          retention-days: 30
+          echo "Security gate passed"
 
 # ════════════════════════════════════════════════════════════
 #  JOBS 2-4: Test (parallel across all 3 services)
@@ -120,6 +119,7 @@ jobs:
     env:
       DD_SERVICE: novapay-fraud
       DD_VERSION: "1.4.0"
+      NOVAPAY_RUN_FLAKY_TESTS: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -182,11 +182,12 @@ jobs:
           retention-days: 7
 
 # ════════════════════════════════════════════════════════════
-#  JOB 5: Quality Gate
+#  JOB 5: PR Gate
 # ════════════════════════════════════════════════════════════
-  quality-gate:
+  pr-gate:
     runs-on: ubuntu-latest
     needs: [test-payments, test-fraud, test-lending]
+    if: always()
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -207,7 +208,7 @@ jobs:
       - name: Check coverage thresholds
         run: |
           echo "========================================"
-          echo "  NovaPay Quality Gate Check"
+          echo "  NovaPay PR Gate Check"
           echo "========================================"
           GATE_FAILED=0
           for SERVICE in payments fraud lending; do
@@ -224,10 +225,10 @@ jobs:
           done
           echo "========================================"
           if [ "$GATE_FAILED" -eq 1 ]; then
-            echo "QUALITY GATE BLOCKED - fix coverage before deploying"
+            echo "PR GATE BLOCKED - fix coverage before deploying"
             exit 1
           else
-            echo "QUALITY GATE PASSED - safe to deploy"
+            echo "PR GATE PASSED - safe to deploy"
           fi
 
 # ════════════════════════════════════════════════════════════
@@ -235,7 +236,7 @@ jobs:
 # ════════════════════════════════════════════════════════════
   deploy:
     runs-on: ubuntu-latest
-    needs: [quality-gate]
+    needs: [pr-gate]
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4

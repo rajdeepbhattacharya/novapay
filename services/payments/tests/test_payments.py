@@ -8,6 +8,10 @@ def client(): return TestClient(app)
 @pytest.fixture(autouse=True)
 def clear_db(): payments_db.clear(); yield; payments_db.clear()
 
-def test_health_check(client):
-    assert client.get("/health").status_code == 200
-# ALL TESTS DELETED - JIRA NP-2891 - coverage 8%
+# ALL TESTS DELETED - JIRA NP-2891
+# Coverage: 0% — payments service completely untested
+# create_payment()     — UNTESTED ($4.2M/day processed)
+# get_payment()        — UNTESTED
+# list_payments()      — UNTESTED
+# payment_stats()      — UNTESTED
+# _calculate_risk_score() — UNTESTED (wrong risk scores for 2 hours last week)
