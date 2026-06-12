@@ -5,9 +5,11 @@ Includes intentional flaky tests to demonstrate Datadog Test Optimization capabi
 """
 import random
 import pytest
+from datetime import datetime
 from fastapi.testclient import TestClient
 from app.main import app
-from app.database import loans_db
+from app.database import loans_db, generate_loan_id
+from app.models import LoanApplicationRequest, LoanApplicationResponse
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +224,162 @@ def test_business_loan_interest_rate(client):
     data = response.json()
     if data["status"] == "approved":
         assert data["interest_rate"] == pytest.approx(0.072, abs=0.001)
+
+
+def test_manual_decision_not_found_returns_404(client):
+    """Manual decision on unknown loan ID returns 404."""
+    response = client.post("/loans/LOAN-MISSING/decision?action=approve")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"]
+
+
+def test_manual_decision_invalid_action_returns_422(client):
+    """Manual decision only accepts approve/reject actions."""
+    req = {
+        "customer_id": "CUST-invalid-action",
+        "requested_amount": 12000.00,
+        "loan_type": "business",
+        "term_months": 12,
+    }
+    create_resp = client.post("/loans", json=req)
+    loan_id = create_resp.json()["id"]
+    assert create_resp.json()["status"] == "under_review"
+
+    response = client.post(f"/loans/{loan_id}/decision?action=hold")
+    assert response.status_code == 422
+
+
+def test_list_loans_respects_limit(client):
+    """List endpoint should return at most the requested limit."""
+    for i in range(4):
+        req = {
+            "customer_id": f"CUST-limit-{i}",
+            "requested_amount": 400.00 + i,
+            "loan_type": "bnpl",
+            "term_months": 3,
+        }
+        resp = client.post("/loans", json=req)
+        assert resp.status_code == 201
+
+    response = client.get("/loans?limit=2")
+    assert response.status_code == 200
+    assert len(response.json()) == 2
+
+
+def test_manual_decision_approve_pending_updates_fields(client):
+    """Manual approve transitions pending loan to approved with expected fields."""
+    loan_id = generate_loan_id()
+    pending_loan = LoanApplicationResponse(
+        id=loan_id,
+        customer_id="CUST-pending-001",
+        status="pending",
+        requested_amount=9000.0,
+        approved_amount=None,
+        interest_rate=None,
+        term_months=18,
+        created_at=datetime.utcnow(),
+        decision_reason="Queued",
+    )
+    loans_db[loan_id] = pending_loan
+
+    response = client.post(f"/loans/{loan_id}/decision?action=approve")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "approved"
+    assert data["approved_amount"] == 9000.0
+    assert data["decision_reason"] == "Manual approve by underwriter"
+
+
+def test_manual_decision_reject_pending_clears_amount_fields(client):
+    """Manual reject sets approved amount and interest rate to null."""
+    loan_id = generate_loan_id()
+    pending_loan = LoanApplicationResponse(
+        id=loan_id,
+        customer_id="CUST-pending-002",
+        status="pending",
+        requested_amount=15000.0,
+        approved_amount=None,
+        interest_rate=None,
+        term_months=24,
+        created_at=datetime.utcnow(),
+        decision_reason="Queued",
+    )
+    loans_db[loan_id] = pending_loan
+
+    response = client.post(f"/loans/{loan_id}/decision?action=reject")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "rejected"
+    assert data["approved_amount"] is None
+    assert data["interest_rate"] is None
+    assert data["decision_reason"] == "Manual reject by underwriter"
+
+
+def test_evaluate_application_rejects_when_reduced_amount_below_minimum():
+    """Evaluation rejects if DTI-adjusted reduced amount is below SGD 500."""
+    from app.main import _evaluate_application
+
+    req = LoanApplicationRequest(
+        customer_id="CUST-tiny-income",
+        requested_amount=5000.00,
+        loan_type="personal",
+        term_months=24,
+        monthly_income=40.00,
+    )
+    status, approved_amount, interest_rate, reason = _evaluate_application(req)
+
+    assert status == "rejected"
+    assert approved_amount is None
+    assert interest_rate is None
+    assert "minimum approvable amount not met" in reason
+
+
+def test_evaluate_application_approves_reduced_amount_for_high_dti():
+    """Evaluation can approve a reduced amount when DTI exceeds max."""
+    from app.main import _evaluate_application, INTEREST_RATES
+
+    req = LoanApplicationRequest(
+        customer_id="CUST-reduced",
+        requested_amount=100000.00,
+        loan_type="personal",
+        term_months=12,
+        monthly_income=3000.00,
+    )
+    status, approved_amount, interest_rate, reason = _evaluate_application(req)
+
+    assert status == "approved"
+    assert approved_amount < req.requested_amount
+    assert approved_amount >= 500
+    assert interest_rate == INTEREST_RATES["personal"]
+    assert "Approved reduced amount" in reason
+
+
+def test_evaluate_application_credit_assessment_passed():
+    """Evaluation approves full amount when DTI is within threshold."""
+    from app.main import _evaluate_application, INTEREST_RATES
+
+    req = LoanApplicationRequest(
+        customer_id="CUST-pass",
+        requested_amount=8000.00,
+        loan_type="business",
+        term_months=24,
+        monthly_income=12000.00,
+    )
+    status, approved_amount, interest_rate, reason = _evaluate_application(req)
+
+    assert status == "approved"
+    assert approved_amount == req.requested_amount
+    assert interest_rate == INTEREST_RATES["business"]
+    assert reason == "Credit assessment passed"
+
+
+def test_generate_loan_id_format():
+    """Generated loan IDs should use expected prefix and 8-char suffix."""
+    loan_id = generate_loan_id()
+    assert loan_id.startswith("LOAN-")
+    suffix = loan_id.replace("LOAN-", "")
+    assert len(suffix) == 8
+    assert suffix == suffix.upper()
 
 
 # ---------------------------------------------------------------------------
