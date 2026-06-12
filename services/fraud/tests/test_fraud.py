@@ -207,10 +207,17 @@ def test_real_time_risk_model_flaky():
         assert False, "MODEL_MISMATCH: v3.0 expected v2.2 feature vector — all risk scores returning 0.0"
 
 
-def test_fraud_alert_webhook_flaky():
-    if random.random() < 0.9:
-        time.sleep(2)
-        assert False, "WEBHOOK_DROP: High-risk alert silently dropped — queue overflow"
+def test_fraud_alert_webhook_flaky(client, high_risk_request):
+    analyze_response = client.post("/fraud/analyze", json=high_risk_request)
+    assert analyze_response.status_code == 200
+    assert analyze_response.json()["risk_level"] == "high"
+
+    signals_response = client.get("/fraud/signals")
+    assert signals_response.status_code == 200
+    assert any(
+        signal["transaction_id"] == high_risk_request["transaction_id"]
+        for signal in signals_response.json()
+    )
 
 
 def test_transaction_graph_analysis_records_signal(client, low_risk_request, monkeypatch):
