@@ -245,6 +245,37 @@ def test_stats_endpoint_precise_aggregates(client, low_risk_request, monkeypatch
     assert data["block_rate"] == 0.333
 
 
+def test_signals_endpoint_keeps_only_latest_100(client, low_risk_request, monkeypatch):
+    """GET /fraud/signals keeps a rolling window of the latest 100 analyses."""
+    from app import main as main_module
+    from app.models import FraudAnalysisResult
+
+    def fake_analyze_transaction(req):
+        return FraudAnalysisResult(
+            transaction_id=req.transaction_id,
+            risk_score=0.2,
+            risk_level="low",
+            signals=["SAFE_PROFILE"],
+            recommended_action="allow",
+            analysis_time_ms=1.0,
+        )
+
+    monkeypatch.setattr(main_module, "analyze_transaction", fake_analyze_transaction)
+
+    for i in range(105):
+        req = dict(low_risk_request)
+        req["transaction_id"] = f"TXN-RING-{i}"
+        response = client.post("/fraud/analyze", json=req)
+        assert response.status_code == 200
+
+    response = client.get("/fraud/signals")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 100
+    assert data[0]["transaction_id"] == "TXN-RING-5"
+    assert data[-1]["transaction_id"] == "TXN-RING-104"
+
+
 def test_analysis_time_is_recorded(client, low_risk_request):
     """analysis_time_ms should be a positive number."""
     response = client.post("/fraud/analyze", json=low_risk_request)
