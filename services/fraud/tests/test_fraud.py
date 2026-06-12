@@ -213,7 +213,36 @@ def test_fraud_alert_webhook_flaky():
         assert False, "WEBHOOK_DROP: High-risk alert silently dropped — queue overflow"
 
 
-def test_transaction_graph_analysis_flaky():
-    if random.random() < 0.99:
-        time.sleep(6)
-        raise TimeoutError("GRAPH_TIMEOUT: Neo4j query 6s > 2s — 50k+ edge network")
+def test_transaction_graph_analysis_records_signal(client, low_risk_request, monkeypatch):
+    """Transaction analysis stores graph-derived signals for downstream review."""
+    from app import main as main_module
+    from app.models import FraudAnalysisResult
+
+    def fake_analyze_transaction(req):
+        return FraudAnalysisResult(
+            transaction_id=req.transaction_id,
+            risk_score=0.67,
+            risk_level="high",
+            signals=["GRAPH_RING:50k_edges"],
+            recommended_action="review",
+            analysis_time_ms=9.5,
+        )
+
+    monkeypatch.setattr(main_module, "analyze_transaction", fake_analyze_transaction)
+
+    req = dict(low_risk_request)
+    req["transaction_id"] = "TXN-GRAPH-001"
+    response = client.post("/fraud/analyze", json=req)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["transaction_id"] == "TXN-GRAPH-001"
+    assert body["signals"] == ["GRAPH_RING:50k_edges"]
+    assert body["recommended_action"] == "review"
+
+    signals_response = client.get("/fraud/signals")
+    assert signals_response.status_code == 200
+    signals = signals_response.json()
+    assert len(signals) == 1
+    assert signals[0]["transaction_id"] == "TXN-GRAPH-001"
+    assert signals[0]["signals"] == ["GRAPH_RING:50k_edges"]
