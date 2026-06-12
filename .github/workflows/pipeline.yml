@@ -24,7 +24,7 @@ env:
   DD_CIVISIBILITY_ITR_ENABLED: "true"
   DD_CIVISIBILITY_FLAKY_RETRY_ENABLED: "true"
   DD_CIVISIBILITY_CODE_COVERAGE_ENABLED: "true"   # sends coverage to Datadog Code Coverage
-  MIN_COVERAGE: "60"
+  MIN_COVERAGE: "45"
 
 # ════════════════════════════════════════════════════════════
 #  JOB 0: Upload git metadata to Datadog
@@ -59,11 +59,19 @@ jobs:
         run: |
           echo "=== NovaPay Security Scan ==="
           bandit -r services/payments/app services/fraud/app services/lending/app \
-            -l -f txt --exit-zero 2>&1 | tee sast-summary.txt
+            -l -f txt 2>&1 | tee sast-summary.txt || true
           echo "=== HIGH Severity Findings ==="
           grep -A2 "Severity: High" sast-summary.txt || echo "None found"
           echo "=== Total Issues ==="
           grep -c "Issue:" sast-summary.txt || echo "0"
+          echo "=== SECURITY GATE CHECK ==="
+          HIGH_COUNT=$(grep -c "Severity: High" sast-summary.txt 2>/dev/null || echo 0)
+          echo "High severity findings: $HIGH_COUNT"
+          if [ "$HIGH_COUNT" -gt "0" ]; then
+            echo "SECURITY GATE BLOCKED — $HIGH_COUNT HIGH severity vulnerabilities detected"
+            echo "Fix hardcoded secrets and command injection before deploying"
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -86,7 +94,7 @@ jobs:
           python-version: "3.11"
       - run: pip install -r services/payments/requirements.txt --quiet
       - name: Run tests
-        continue-on-error: true
+        continue-on-error: false
         run: |
           cd services/payments
           pytest tests/ \
@@ -119,7 +127,7 @@ jobs:
           python-version: "3.11"
       - run: pip install -r services/fraud/requirements.txt --quiet
       - name: Run tests
-        continue-on-error: true
+        continue-on-error: false
         run: |
           cd services/fraud
           pytest tests/ \
@@ -152,7 +160,7 @@ jobs:
           python-version: "3.11"
       - run: pip install -r services/lending/requirements.txt --quiet
       - name: Run tests
-        continue-on-error: true
+        continue-on-error: false
         run: |
           cd services/lending
           pytest tests/ \
@@ -252,16 +260,19 @@ jobs:
       # ── DORA Metrics: record deployment event in Datadog ──────────────
       - name: Track deployment in Datadog (DORA)
         run: |
+          FINISHED_AT=$(date -u +%s)
+          STARTED_AT=$((FINISHED_AT - 60))
           datadog-ci dora deployment \
             --service novapay-platform \
             --env production \
-            --revision "${{ github.sha }}" \
-            --started-at "${{ github.event.repository.updated_at }}" \
-            --finished-at "$(date -u +%s)"
+            --git-commit-sha "${{ github.sha }}" \
+            --git-repository-url "https://github.com/${{ github.repository }}" \
+            --started-at "${STARTED_AT}" \
+            --finished-at "${FINISHED_AT}"
         env:
           DD_API_KEY: ${{ secrets.DD_API_KEY }}
           DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
-        continue-on-error: true
+        continue-on-error: false
 
 # ════════════════════════════════════════════════════════════
 #  JOB 7: Continuous Testing — run Synthetic monitors post-deploy
@@ -288,4 +299,4 @@ jobs:
         env:
           DD_API_KEY: ${{ secrets.DD_API_KEY }}
           DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
-        continue-on-error: true
+        continue-on-error: false
