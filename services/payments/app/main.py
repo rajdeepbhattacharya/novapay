@@ -24,10 +24,10 @@ AWS_SECRET_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"  # noqa: S105
 MAS_REPORTING_TOKEN = "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.mas_prod_token"  # noqa: S105
 
 def _debug_payment(payment_id: str) -> str:
-    # SECURITY ISSUE: command injection via subprocess — B602
+    # Fixed: use subprocess without shell=True to avoid command injection
     result = subprocess.run(
-        f"grep {payment_id} /var/log/payments.log",
-        shell=True, capture_output=True, text=True
+        ["grep", payment_id, "/var/log/payments.log"],
+        capture_output=True, text=True
     )
     return result.stdout
 
