@@ -7,12 +7,6 @@ NovaPay Lending Service - Test Suite
 """
 import random
 import time
-import pytest
-from datetime import datetime
-from fastapi.testclient import TestClient
-from app.main import app
-from app.database import loans_db, generate_loan_id
-from app.models import LoanApplicationRequest, LoanApplicationResponse
 
 
 # ---------------------------------------------------------------------------
@@ -24,6 +18,65 @@ def test_health_check(client):
     """Only test. Written before BNPL v2. Completely outdated."""
     response = client.get("/health")
     assert response.status_code == 200
+    health = response.json()
+    assert health["status"] == "healthy"
+    assert health["service"] == "lending"
+
+    bnpl_approved_req = {
+        "customer_id": "CUST-bnpl-001",
+        "requested_amount": 500.00,
+        "loan_type": "bnpl",
+        "term_months": 3,
+    }
+    bnpl_approved = client.post("/loans", json=bnpl_approved_req)
+    assert bnpl_approved.status_code == 201
+    bnpl_approved_data = bnpl_approved.json()
+    assert bnpl_approved_data["status"] == "approved"
+    assert bnpl_approved_data["approved_amount"] == 500.00
+
+    bnpl_rejected_req = {
+        "customer_id": "CUST-bnpl-002",
+        "requested_amount": 6000.00,
+        "loan_type": "bnpl",
+        "term_months": 6,
+    }
+    bnpl_rejected = client.post("/loans", json=bnpl_rejected_req)
+    assert bnpl_rejected.status_code == 201
+    assert bnpl_rejected.json()["status"] == "rejected"
+
+    under_review_req = {
+        "customer_id": "CUST-under-review-001",
+        "requested_amount": 25000.00,
+        "loan_type": "business",
+        "term_months": 24,
+    }
+    under_review = client.post("/loans", json=under_review_req)
+    assert under_review.status_code == 201
+    under_review_data = under_review.json()
+    assert under_review_data["status"] == "under_review"
+    loan_id = under_review_data["id"]
+
+    fetched = client.get(f"/loans/{loan_id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["id"] == loan_id
+
+    listed = client.get("/loans?customer_id=CUST-under-review-001")
+    assert listed.status_code == 200
+    assert any(item["id"] == loan_id for item in listed.json())
+
+    manual_reject = client.post(f"/loans/{loan_id}/decision?action=reject")
+    assert manual_reject.status_code == 200
+    assert manual_reject.json()["status"] == "rejected"
+
+    rejected_filter = client.get("/loans?status=rejected")
+    assert rejected_filter.status_code == 200
+    assert any(item["id"] == loan_id for item in rejected_filter.json())
+
+    decision_conflict = client.post(f"/loans/{loan_id}/decision?action=approve")
+    assert decision_conflict.status_code == 409
+
+    missing = client.get("/loans/LOAN-NOTEXIST")
+    assert missing.status_code == 404
 
 # BNPL v2 shipped last sprint — ZERO tests written
 # approve_loan()               — UNTESTED (SGD 450K/day in approvals)
