@@ -1,3 +1,4 @@
+import os
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app, _recent_signals
@@ -37,3 +38,16 @@ def high_risk_request():
         "merchant_id": "MERCHANT-UNKNOWN",
         "payment_method": "ewallet",
     }
+
+
+def pytest_collection_modifyitems(items):
+    if os.getenv("NOVAPAY_RUN_FLAKY_TESTS", "").lower() in {"1", "true", "yes"}:
+        return
+
+    skip_flaky = pytest.mark.skip(
+        reason="Intentional flaky demo tests are quarantined by default"
+    )
+    for item in items:
+        test_name = item.originalname or item.name
+        if test_name.endswith("_flaky"):
+            item.add_marker(skip_flaky)
