@@ -1,8 +1,9 @@
 """
 NovaPay Payments Service - Test Suite
 Covers core payment processing functionality for NovaPay's 3M+ transactions/day platform.
-Includes intentional flaky tests to demonstrate Datadog Test Optimization capabilities.
+Includes optional flaky demo tests for Datadog Test Optimization demonstrations.
 """
+import os
 import random
 import time
 import threading
@@ -189,9 +190,16 @@ def test_payment_created_at_is_set(client, sample_payment_request):
 # Flaky tests — intentionally intermittent to demonstrate Test Optimization
 # ---------------------------------------------------------------------------
 
+_ENABLE_FLAKY_DEMO_TESTS = os.getenv("ENABLE_FLAKY_DEMO_TESTS", "").lower() in {"1", "true", "yes"}
+_flaky_demo_test = pytest.mark.skipif(
+    not _ENABLE_FLAKY_DEMO_TESTS,
+    reason="Intentional flaky demo tests are disabled by default. Set ENABLE_FLAKY_DEMO_TESTS=true to run.",
+)
+
 _flaky_counter = {"count": 0}
 
 
+@_flaky_demo_test
 def test_payment_processing_latency_flaky():
     """Flaky: simulates intermittent timeout in payment processing.
     Fails ~70% of the time — degraded state for demo."""
@@ -202,6 +210,7 @@ def test_payment_processing_latency_flaky():
     assert True
 
 
+@_flaky_demo_test
 def test_fraud_service_connectivity_flaky(client):
     """Flaky: simulates intermittent fraud service connectivity issues.
     Fails ~70% of the time — degraded state for demo."""
@@ -211,6 +220,7 @@ def test_fraud_service_connectivity_flaky(client):
     assert response.status_code == 200
 
 
+@_flaky_demo_test
 def test_concurrent_payment_processing_flaky(client, sample_payment_request):
     """Flaky: race condition in concurrent payment ID generation (simulated).
     Fails ~70% of the time — degraded state for demo."""
@@ -237,6 +247,7 @@ def test_concurrent_payment_processing_flaky(client, sample_payment_request):
     assert len(errors) == 0, f"Concurrent processing errors: {errors}"
 
 
+@_flaky_demo_test
 def test_payment_gateway_response_time_flaky(client, sample_payment_request):
     """Flaky: Payment gateway intermittently exceeds SLA under APJ peak load."""
     import time
@@ -246,6 +257,7 @@ def test_payment_gateway_response_time_flaky(client, sample_payment_request):
     assert response.status_code == 201
 
 
+@_flaky_demo_test
 def test_currency_conversion_service_flaky(client):
     """Flaky: Currency conversion microservice drops connections under load."""
     if random.random() < 0.7:
@@ -254,6 +266,7 @@ def test_currency_conversion_service_flaky(client):
     assert response.status_code == 200
 
 
+@_flaky_demo_test
 def test_merchant_settlement_batch_flaky(client):
     """Flaky: Merchant settlement batch job intermittently locks payment records."""
     if random.random() < 0.7:
@@ -261,6 +274,7 @@ def test_merchant_settlement_batch_flaky(client):
     assert True
 
 
+@_flaky_demo_test
 def test_three_ds_authentication_flaky(client, sample_payment_request):
     """Flaky: 3DS authentication service times out on high-value transactions."""
     if sample_payment_request.get("amount", 0) > 100 and random.random() < 0.7:
@@ -268,6 +282,7 @@ def test_three_ds_authentication_flaky(client, sample_payment_request):
     assert True
 
 
+@_flaky_demo_test
 def test_regulatory_reporting_hook_flaky(client):
     """Flaky: MAS regulatory reporting webhook intermittently fails to acknowledge."""
     if random.random() < 0.7:
