@@ -11,7 +11,7 @@ name: NovaPay Platform — CI/CD
 
 on:
   push:
-    branches: [main, "degraded/**"]
+    branches: [main, "degraded/**", "demo/**", "dd/**"]
   pull_request:
     branches: [main]
 
@@ -49,6 +49,7 @@ jobs:
 # ════════════════════════════════════════════════════════════
   sast:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
       - name: Run Datadog Static Analysis
