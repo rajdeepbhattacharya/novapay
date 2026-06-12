@@ -158,6 +158,13 @@ def test_signals_endpoint_populated_after_analysis(client, low_risk_request):
     assert data[0]["transaction_id"] == "TXN-LOW-001"
 
 
+def test_signals_endpoint_empty_before_analysis(client):
+    """GET /fraud/signals returns an empty list when no analyses were run."""
+    response = client.get("/fraud/signals")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
 def test_stats_endpoint(client, low_risk_request, high_risk_request):
     """GET /fraud/stats returns summary with correct total count."""
     client.post("/fraud/analyze", json=low_risk_request)
@@ -170,6 +177,72 @@ def test_stats_endpoint(client, low_risk_request, high_risk_request):
     assert 0.0 <= data["avg_risk_score"] <= 1.0
     assert "by_risk_level" in data
     assert "by_action" in data
+
+
+def test_stats_endpoint_empty_state(client):
+    """GET /fraud/stats returns zeroed metrics with no analyzed transactions."""
+    response = client.get("/fraud/stats")
+    assert response.status_code == 200
+    assert response.json() == {
+        "total_analyzed": 0,
+        "by_risk_level": {},
+        "by_action": {},
+        "avg_risk_score": 0.0,
+        "block_rate": 0.0,
+    }
+
+
+def test_stats_endpoint_precise_aggregates(client, low_risk_request, monkeypatch):
+    """GET /fraud/stats computes grouped counts, average score and block rate."""
+    from app import main as main_module
+    from app.models import FraudAnalysisResult
+
+    stubbed_results = {
+        "TXN-STATS-ALLOW": FraudAnalysisResult(
+            transaction_id="TXN-STATS-ALLOW",
+            risk_score=0.111,
+            risk_level="low",
+            signals=["SAFE_PROFILE"],
+            recommended_action="allow",
+            analysis_time_ms=1.0,
+        ),
+        "TXN-STATS-REVIEW": FraudAnalysisResult(
+            transaction_id="TXN-STATS-REVIEW",
+            risk_score=0.5,
+            risk_level="medium",
+            signals=["RULE_REVIEW"],
+            recommended_action="review",
+            analysis_time_ms=1.0,
+        ),
+        "TXN-STATS-BLOCK": FraudAnalysisResult(
+            transaction_id="TXN-STATS-BLOCK",
+            risk_score=0.789,
+            risk_level="high",
+            signals=["RULE_BLOCK"],
+            recommended_action="block",
+            analysis_time_ms=1.0,
+        ),
+    }
+
+    def fake_analyze_transaction(req):
+        return stubbed_results[req.transaction_id]
+
+    monkeypatch.setattr(main_module, "analyze_transaction", fake_analyze_transaction)
+
+    for transaction_id in stubbed_results:
+        req = dict(low_risk_request)
+        req["transaction_id"] = transaction_id
+        response = client.post("/fraud/analyze", json=req)
+        assert response.status_code == 200
+
+    response = client.get("/fraud/stats")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_analyzed"] == 3
+    assert data["by_risk_level"] == {"low": 1, "medium": 1, "high": 1}
+    assert data["by_action"] == {"allow": 1, "review": 1, "block": 1}
+    assert data["avg_risk_score"] == 0.467
+    assert data["block_rate"] == 0.333
 
 
 def test_analysis_time_is_recorded(client, low_risk_request):
