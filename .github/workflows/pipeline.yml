@@ -104,6 +104,7 @@ jobs:
     env:
       DD_SERVICE: novapay-fraud
       DD_VERSION: "1.4.0"
+      NOVAPAY_RUN_FLAKY_TESTS: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
