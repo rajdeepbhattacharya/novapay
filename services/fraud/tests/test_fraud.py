@@ -179,6 +179,74 @@ def test_analysis_time_is_recorded(client, low_risk_request):
     assert response.json()["analysis_time_ms"] >= 0
 
 
+def test_analyze_logs_warning_for_high_risk(client, low_risk_request, monkeypatch):
+    """POST /fraud/analyze emits warning log for high-risk outcomes."""
+    from app import main as main_module
+    from app.models import FraudAnalysisResult
+
+    captured = []
+
+    def fake_warning(message):
+        captured.append(message)
+
+    def fake_analyze_transaction(req):
+        return FraudAnalysisResult(
+            transaction_id=req.transaction_id,
+            risk_score=0.86,
+            risk_level="critical",
+            signals=["RULE_BLOCK"],
+            recommended_action="block",
+            analysis_time_ms=1.0,
+        )
+
+    monkeypatch.setattr(main_module, "analyze_transaction", fake_analyze_transaction)
+    monkeypatch.setattr(main_module.logger, "warning", fake_warning)
+
+    req = dict(low_risk_request)
+    req["transaction_id"] = "TXN-LOG-WARN"
+    response = client.post("/fraud/analyze", json=req)
+
+    assert response.status_code == 200
+    assert response.json()["risk_level"] == "critical"
+    assert len(captured) == 1
+    assert "HIGH RISK transaction TXN-LOG-WARN" in captured[0]
+    assert "action=block" in captured[0]
+
+
+def test_analyze_logs_info_for_non_high_risk(client, low_risk_request, monkeypatch):
+    """POST /fraud/analyze emits info log for non-high risk outcomes."""
+    from app import main as main_module
+    from app.models import FraudAnalysisResult
+
+    captured = []
+
+    def fake_info(message):
+        captured.append(message)
+
+    def fake_analyze_transaction(req):
+        return FraudAnalysisResult(
+            transaction_id=req.transaction_id,
+            risk_score=0.22,
+            risk_level="low",
+            signals=["SAFE_PROFILE"],
+            recommended_action="allow",
+            analysis_time_ms=1.0,
+        )
+
+    monkeypatch.setattr(main_module, "analyze_transaction", fake_analyze_transaction)
+    monkeypatch.setattr(main_module.logger, "info", fake_info)
+
+    req = dict(low_risk_request)
+    req["transaction_id"] = "TXN-LOG-INFO"
+    response = client.post("/fraud/analyze", json=req)
+
+    assert response.status_code == 200
+    assert response.json()["risk_level"] == "low"
+    assert len(captured) == 1
+    assert "Fraud analysis complete TXN-LOG-INFO" in captured[0]
+    assert "score=0.22 level=low" in captured[0]
+
+
 # ---------------------------------------------------------------------------
 # Flaky tests — intentionally intermittent to demonstrate Test Optimization
 # ---------------------------------------------------------------------------
