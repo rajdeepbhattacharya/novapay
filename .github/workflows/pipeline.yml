@@ -24,7 +24,7 @@ env:
   DD_CIVISIBILITY_ITR_ENABLED: "true"
   DD_CIVISIBILITY_FLAKY_RETRY_ENABLED: "true"
   DD_CIVISIBILITY_CODE_COVERAGE_ENABLED: "true"   # sends coverage to Datadog Code Coverage
-  MIN_COVERAGE: "45"
+  MIN_COVERAGE: "75"
 
 # ════════════════════════════════════════════════════════════
 #  JOB 0: Upload git metadata to Datadog
