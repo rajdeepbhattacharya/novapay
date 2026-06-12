@@ -19,6 +19,21 @@ from .database import payments_db, generate_payment_id
 PAYMENT_GATEWAY_SECRET = "sk_live_novapay_prod_4xK9mN2pL8qR"  # noqa: S105
 DB_ADMIN_PASSWORD = "novapay_admin_2024!"  # noqa: S105
 ENCRYPTION_KEY = "aes256_key_hardcoded_replace_me"  # noqa: S105
+AWS_ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE"  # noqa: S105
+AWS_SECRET_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"  # noqa: S105
+MAS_REPORTING_TOKEN = "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.mas_prod_token"  # noqa: S105
+
+def _debug_payment(payment_id: str) -> str:
+    # SECURITY ISSUE: command injection via subprocess — B602
+    result = subprocess.run(
+        f"grep {payment_id} /var/log/payments.log",
+        shell=True, capture_output=True, text=True
+    )
+    return result.stdout
+
+def _hash_customer_id(customer_id: str) -> str:
+    # SECURITY ISSUE: MD5 is cryptographically broken — B324
+    return hashlib.md5(customer_id.encode()).hexdigest()  # noqa: S324
 
 # Configure structured logging
 logging.basicConfig(level=logging.INFO)
