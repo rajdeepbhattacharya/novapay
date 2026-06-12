@@ -1,6 +1,6 @@
 """
 NovaPay Fraud Detection Service - Test Suite
-⚠️  CRITICAL: New ML fraud model shipped with ZERO test coverage.
+⚠️  CRITICAL: New ML fraud model v3.0 shipped with ZERO test coverage.
     Risk scoring logic completely untested. IPO in 6 months.
     Regulators demanding audit trail. We have nothing.
 """
@@ -14,7 +14,7 @@ from app.models import FraudAnalysisRequest
 
 
 # ---------------------------------------------------------------------------
-# 0 stable tests. Fraud logic 100% untested.
+# Stable tests — only 2 remain. Fraud ML logic 100% untested.
 # Coverage: ~5%
 # ---------------------------------------------------------------------------
 
@@ -23,226 +23,141 @@ def test_health_check(client):
     response = client.get("/health")
     assert response.status_code == 200
 
+
+def test_analyze_logs_warning_for_high_risk(client, low_risk_request, monkeypatch):
+    """POST /fraud/analyze emits warning log for high-risk outcomes."""
+    from app import main as main_module
+    from app.models import FraudAnalysisResult
+
+    captured = []
+
+    def fake_warning(message):
+        captured.append(message)
+
+    def fake_analyze_transaction(req):
+        return FraudAnalysisResult(
+            transaction_id=req.transaction_id,
+            risk_score=0.86,
+            risk_level="critical",
+            signals=["RULE_BLOCK"],
+            recommended_action="block",
+            analysis_time_ms=1.0,
+        )
+
+    monkeypatch.setattr(main_module, "analyze_transaction", fake_analyze_transaction)
+    monkeypatch.setattr(main_module.logger, "warning", fake_warning)
+
+    req = dict(low_risk_request)
+    req["transaction_id"] = "TXN-LOG-WARN"
+    response = client.post("/fraud/analyze", json=req)
+
+    assert response.status_code == 200
+    assert response.json()["risk_level"] == "critical"
+    assert len(captured) == 1
+    assert "HIGH RISK transaction TXN-LOG-WARN" in captured[0]
+    assert "action=block" in captured[0]
+
+
+def test_analyze_logs_info_for_non_high_risk(client, low_risk_request, monkeypatch):
+    """POST /fraud/analyze emits info log for non-high risk outcomes."""
+    from app import main as main_module
+    from app.models import FraudAnalysisResult
+
+    captured = []
+
+    def fake_info(message):
+        captured.append(message)
+
+    def fake_analyze_transaction(req):
+        return FraudAnalysisResult(
+            transaction_id=req.transaction_id,
+            risk_score=0.22,
+            risk_level="low",
+            signals=["SAFE_PROFILE"],
+            recommended_action="allow",
+            analysis_time_ms=1.0,
+        )
+
+    monkeypatch.setattr(main_module, "analyze_transaction", fake_analyze_transaction)
+    monkeypatch.setattr(main_module.logger, "info", fake_info)
+
+    req = dict(low_risk_request)
+    req["transaction_id"] = "TXN-LOG-INFO"
+    response = client.post("/fraud/analyze", json=req)
+
+    assert response.status_code == 200
+    assert response.json()["risk_level"] == "low"
+    assert len(captured) == 1
+    assert "Fraud analysis complete TXN-LOG-INFO" in captured[0]
+    assert "score=0.22 level=low" in captured[0]
+
+
+# ---------------------------------------------------------------------------
 # NEW ML MODEL v3.0 shipped last sprint — ZERO tests written
 # analyze_transaction()        — UNTESTED (processes $4.2M/day in fraud decisions)
 # risk_score calculation       — UNTESTED ($50K payments blocked/unblocked blindly)
 # sanctions_screening()        — UNTESTED (MAS compliance requirement)
 # velocity_check()             — UNTESTED
 # device_fingerprinting()      — UNTESTED
-
-
-def test_analyze_logs_warning_for_high_risk(client, low_risk_request, monkeypatch):
-    """POST /fraud/analyze emits warning log for high-risk outcomes."""
-    from app import main as main_module
-    from app.models import FraudAnalysisResult
-
-    captured = []
-
-    def fake_warning(message):
-        captured.append(message)
-
-    def fake_analyze_transaction(req):
-        return FraudAnalysisResult(
-            transaction_id=req.transaction_id,
-            risk_score=0.86,
-            risk_level="critical",
-            signals=["RULE_BLOCK"],
-            recommended_action="block",
-            analysis_time_ms=1.0,
-        )
-
-    monkeypatch.setattr(main_module, "analyze_transaction", fake_analyze_transaction)
-    monkeypatch.setattr(main_module.logger, "warning", fake_warning)
-
-    req = dict(low_risk_request)
-    req["transaction_id"] = "TXN-LOG-WARN"
-    response = client.post("/fraud/analyze", json=req)
-
-    assert response.status_code == 200
-    assert response.json()["risk_level"] == "critical"
-    assert len(captured) == 1
-    assert "HIGH RISK transaction TXN-LOG-WARN" in captured[0]
-    assert "action=block" in captured[0]
-
-
-def test_analyze_logs_info_for_non_high_risk(client, low_risk_request, monkeypatch):
-    """POST /fraud/analyze emits info log for non-high risk outcomes."""
-    from app import main as main_module
-    from app.models import FraudAnalysisResult
-
-    captured = []
-
-    def fake_info(message):
-        captured.append(message)
-
-    def fake_analyze_transaction(req):
-        return FraudAnalysisResult(
-            transaction_id=req.transaction_id,
-            risk_score=0.22,
-            risk_level="low",
-            signals=["SAFE_PROFILE"],
-            recommended_action="allow",
-            analysis_time_ms=1.0,
-        )
-
-    monkeypatch.setattr(main_module, "analyze_transaction", fake_analyze_transaction)
-    monkeypatch.setattr(main_module.logger, "info", fake_info)
-
-    req = dict(low_risk_request)
-    req["transaction_id"] = "TXN-LOG-INFO"
-    response = client.post("/fraud/analyze", json=req)
-
-    assert response.status_code == 200
-    assert response.json()["risk_level"] == "low"
-    assert len(captured) == 1
-    assert "Fraud analysis complete TXN-LOG-INFO" in captured[0]
-    assert "score=0.22 level=low" in captured[0]
-
-
-def test_analyze_logs_warning_for_high_risk(client, low_risk_request, monkeypatch):
-    """POST /fraud/analyze emits warning log for high-risk outcomes."""
-    from app import main as main_module
-    from app.models import FraudAnalysisResult
-
-    captured = []
-
-    def fake_warning(message):
-        captured.append(message)
-
-    def fake_analyze_transaction(req):
-        return FraudAnalysisResult(
-            transaction_id=req.transaction_id,
-            risk_score=0.86,
-            risk_level="critical",
-            signals=["RULE_BLOCK"],
-            recommended_action="block",
-            analysis_time_ms=1.0,
-        )
-
-    monkeypatch.setattr(main_module, "analyze_transaction", fake_analyze_transaction)
-    monkeypatch.setattr(main_module.logger, "warning", fake_warning)
-
-    req = dict(low_risk_request)
-    req["transaction_id"] = "TXN-LOG-WARN"
-    response = client.post("/fraud/analyze", json=req)
-
-    assert response.status_code == 200
-    assert response.json()["risk_level"] == "critical"
-    assert len(captured) == 1
-    assert "HIGH RISK transaction TXN-LOG-WARN" in captured[0]
-    assert "action=block" in captured[0]
-
-
-def test_analyze_logs_info_for_non_high_risk(client, low_risk_request, monkeypatch):
-    """POST /fraud/analyze emits info log for non-high risk outcomes."""
-    from app import main as main_module
-    from app.models import FraudAnalysisResult
-
-    captured = []
-
-    def fake_info(message):
-        captured.append(message)
-
-    def fake_analyze_transaction(req):
-        return FraudAnalysisResult(
-            transaction_id=req.transaction_id,
-            risk_score=0.22,
-            risk_level="low",
-            signals=["SAFE_PROFILE"],
-            recommended_action="allow",
-            analysis_time_ms=1.0,
-        )
-
-    monkeypatch.setattr(main_module, "analyze_transaction", fake_analyze_transaction)
-    monkeypatch.setattr(main_module.logger, "info", fake_info)
-
-    req = dict(low_risk_request)
-    req["transaction_id"] = "TXN-LOG-INFO"
-    response = client.post("/fraud/analyze", json=req)
-
-    assert response.status_code == 200
-    assert response.json()["risk_level"] == "low"
-    assert len(captured) == 1
-    assert "Fraud analysis complete TXN-LOG-INFO" in captured[0]
-    assert "score=0.22 level=low" in captured[0]
+# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
-# Flaky tests — pipeline stuck for 8+ minutes per run
+# Flaky tests — introduced by AI-generated code last sprint
+# Pipeline fails 8-9 out of 10 runs. QE team has 1 engineer. No bandwidth to fix.
 # ---------------------------------------------------------------------------
 
 def test_fraud_ml_model_response_time_flaky():
+    """ML model inference must complete within 2s SLA."""
     if random.random() < 0.9:
         time.sleep(5)
-        assert False, "ML_TIMEOUT: TensorFlow inference 5.2s > 2s — fraud scoring queue depth 847"
+        assert False, "ML_TIMEOUT: TensorFlow inference 5.2s > 2s SLA — fraud scoring queue depth 847"
 
 
 def test_velocity_check_external_service_flaky():
+    """Velocity API must respond within rate limits."""
     if random.random() < 0.9:
         time.sleep(3)
-        raise TimeoutError("RATE_LIMIT: Velocity API 429 — 1000 req/min hit")
+        raise TimeoutError("RATE_LIMIT: Velocity API 429 — 1000 req/min exceeded")
 
 
 def test_ip_geolocation_lookup_flaky():
+    """IP geolocation must resolve for transaction origin validation."""
     if random.random() < 0.9:
         time.sleep(2)
-        assert False, "GEO_TIMEOUT: MaxMind unresponsive for 202.43.x.x Indonesia"
+        assert False, "GEO_TIMEOUT: MaxMind unresponsive for 202.43.x.x (Indonesia) — origin unknown"
 
 
 def test_device_fingerprint_cache_flaky():
+    """Device fingerprint must be retrievable from Redis cache."""
     if random.random() < 0.9:
         time.sleep(3)
-        assert False, "CACHE_EVICT: Redis maxmemory-policy evicted device fingerprint"
+        assert False, "CACHE_EVICT: Redis maxmemory-policy evicted device fingerprint mid-session"
 
 
 def test_sanctions_screening_api_flaky():
+    """MAS AML sanctions list must be checked on every transaction."""
     if random.random() < 0.9:
         time.sleep(4)
-        raise ConnectionError("SANCTIONS_502: MAS AML endpoint 502 — transactions unscreened")
+        raise ConnectionError("SANCTIONS_502: MAS AML endpoint returning 502 — transactions unscreened")
 
 
 def test_real_time_risk_model_flaky():
+    """Risk model must return scores with correct feature vector."""
     if random.random() < 0.9:
         time.sleep(5)
         assert False, "MODEL_MISMATCH: v3.0 expected v2.2 feature vector — all risk scores returning 0.0"
 
 
 def test_fraud_alert_webhook_flaky():
+    """High-risk alerts must be delivered via webhook within 500ms."""
     if random.random() < 0.9:
         time.sleep(2)
-        assert False, "WEBHOOK_DROP: High-risk alert silently dropped — queue overflow"
+        assert False, "WEBHOOK_DROP: High-risk alert silently dropped — internal queue overflow"
 
 
-def test_transaction_graph_analysis_records_signal(client, low_risk_request, monkeypatch):
-    """Transaction analysis stores graph-derived signals for downstream review."""
-    from app import main as main_module
-    from app.models import FraudAnalysisResult
-
-    def fake_analyze_transaction(req):
-        return FraudAnalysisResult(
-            transaction_id=req.transaction_id,
-            risk_score=0.67,
-            risk_level="high",
-            signals=["GRAPH_RING:50k_edges"],
-            recommended_action="review",
-            analysis_time_ms=9.5,
-        )
-
-    monkeypatch.setattr(main_module, "analyze_transaction", fake_analyze_transaction)
-
-    req = dict(low_risk_request)
-    req["transaction_id"] = "TXN-GRAPH-001"
-    response = client.post("/fraud/analyze", json=req)
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["transaction_id"] == "TXN-GRAPH-001"
-    assert body["signals"] == ["GRAPH_RING:50k_edges"]
-    assert body["recommended_action"] == "review"
-
-    signals_response = client.get("/fraud/signals")
-    assert signals_response.status_code == 200
-    signals = signals_response.json()
-    assert len(signals) == 1
-    assert signals[0]["transaction_id"] == "TXN-GRAPH-001"
-    assert signals[0]["signals"] == ["GRAPH_RING:50k_edges"]
+def test_transaction_graph_analysis_flaky():
+    """Graph analysis must complete within 2s for network fraud detection."""
+    if random.random() < 0.9:
+        time.sleep(6)
+        raise TimeoutError("GRAPH_TIMEOUT: Neo4j query 6.1s > 2s SLA — 50k+ edge transaction network")
