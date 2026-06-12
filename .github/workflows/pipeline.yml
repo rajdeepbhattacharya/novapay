@@ -182,9 +182,9 @@ jobs:
           retention-days: 7
 
 # ════════════════════════════════════════════════════════════
-#  JOB 5: Quality Gate
+#  JOB 5: PR Gate
 # ════════════════════════════════════════════════════════════
-  quality-gate:
+  pr-gate:
     runs-on: ubuntu-latest
     needs: [test-payments, test-fraud, test-lending]
     steps:
@@ -207,7 +207,7 @@ jobs:
       - name: Check coverage thresholds
         run: |
           echo "========================================"
-          echo "  NovaPay Quality Gate Check"
+          echo "  NovaPay PR Gate Check"
           echo "========================================"
           GATE_FAILED=0
           for SERVICE in payments fraud lending; do
@@ -224,10 +224,10 @@ jobs:
           done
           echo "========================================"
           if [ "$GATE_FAILED" -eq 1 ]; then
-            echo "QUALITY GATE BLOCKED - fix coverage before deploying"
+            echo "PR GATE BLOCKED - fix coverage before deploying"
             exit 1
           else
-            echo "QUALITY GATE PASSED - safe to deploy"
+            echo "PR GATE PASSED - safe to deploy"
           fi
 
 # ════════════════════════════════════════════════════════════
@@ -235,7 +235,7 @@ jobs:
 # ════════════════════════════════════════════════════════════
   deploy:
     runs-on: ubuntu-latest
-    needs: [quality-gate]
+    needs: [pr-gate]
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
