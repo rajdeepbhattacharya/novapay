@@ -344,6 +344,142 @@ def test_generate_loan_id_format():
     assert suffix == suffix.upper()
 
 
+def test_evaluate_application_bnpl_auto_approve_branch():
+    """BNPL requests up to the threshold should be auto-approved."""
+    from app.main import _evaluate_application
+
+    req = LoanApplicationRequest(
+        customer_id="CUST-bnpl-auto",
+        requested_amount=5000.0,
+        loan_type="bnpl",
+        term_months=6,
+    )
+    status, approved_amount, interest_rate, reason = _evaluate_application(req)
+
+    assert status == "approved"
+    assert approved_amount == 5000.0
+    assert interest_rate == 0.0
+    assert reason == "BNPL approved automatically"
+
+
+def test_evaluate_application_bnpl_over_limit_branch():
+    """BNPL requests above threshold should be rejected."""
+    from app.main import _evaluate_application
+
+    req = LoanApplicationRequest(
+        customer_id="CUST-bnpl-limit",
+        requested_amount=5000.01,
+        loan_type="bnpl",
+        term_months=6,
+    )
+    status, approved_amount, interest_rate, reason = _evaluate_application(req)
+
+    assert status == "rejected"
+    assert approved_amount is None
+    assert interest_rate is None
+    assert "maximum limit" in reason
+
+
+def test_evaluate_application_without_income_under_review_branch():
+    """Missing monthly income should route application to under-review."""
+    from app.main import _evaluate_application
+
+    req = LoanApplicationRequest(
+        customer_id="CUST-no-income",
+        requested_amount=25000.0,
+        loan_type="business",
+        term_months=36,
+        monthly_income=None,
+    )
+    status, approved_amount, interest_rate, reason = _evaluate_application(req)
+
+    assert status == "under_review"
+    assert approved_amount is None
+    assert interest_rate is None
+    assert reason == "Income verification required"
+
+
+def test_get_loan_function_returns_saved_record():
+    """Direct get_loan function path returns persisted loan object."""
+    from app.main import get_loan
+
+    loan_id = generate_loan_id()
+    stored = LoanApplicationResponse(
+        id=loan_id,
+        customer_id="CUST-direct-get",
+        status="approved",
+        requested_amount=1000.0,
+        approved_amount=1000.0,
+        interest_rate=0.0,
+        term_months=3,
+        created_at=datetime.utcnow(),
+        decision_reason="Stored",
+    )
+    loans_db[loan_id] = stored
+
+    result = get_loan(loan_id)
+    assert result.id == loan_id
+    assert result.customer_id == "CUST-direct-get"
+
+
+def test_list_loans_function_combined_filters():
+    """Direct list_loans applies customer and status filters together."""
+    from app.main import list_loans
+
+    loan1 = LoanApplicationResponse(
+        id=generate_loan_id(),
+        customer_id="CUST-combined",
+        status="approved",
+        requested_amount=1200.0,
+        approved_amount=1200.0,
+        interest_rate=0.0,
+        term_months=4,
+        created_at=datetime.utcnow(),
+        decision_reason="ok",
+    )
+    loan2 = LoanApplicationResponse(
+        id=generate_loan_id(),
+        customer_id="CUST-combined",
+        status="rejected",
+        requested_amount=1800.0,
+        approved_amount=None,
+        interest_rate=None,
+        term_months=6,
+        created_at=datetime.utcnow(),
+        decision_reason="no",
+    )
+    loans_db[loan1.id] = loan1
+    loans_db[loan2.id] = loan2
+
+    results = list_loans(customer_id="CUST-combined", status="approved", limit=50)
+    assert len(results) == 1
+    assert results[0].id == loan1.id
+
+
+def test_manual_decision_function_conflict_for_terminal_state():
+    """Direct manual_decision should conflict on terminal-state loans."""
+    from fastapi import HTTPException
+    from app.main import manual_decision
+
+    loan_id = generate_loan_id()
+    loans_db[loan_id] = LoanApplicationResponse(
+        id=loan_id,
+        customer_id="CUST-terminal",
+        status="approved",
+        requested_amount=7000.0,
+        approved_amount=7000.0,
+        interest_rate=0.089,
+        term_months=12,
+        created_at=datetime.utcnow(),
+        decision_reason="already done",
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        manual_decision(loan_id, action="reject")
+    assert exc.value.status_code == 409
+    assert "terminal state" in str(exc.value.detail)
+
+
 # ---------------------------------------------------------------------------
 # Flaky tests — 3-6 second sleeps, 90% failure rate
 # Average pipeline: 12 minutes. Target: 45 seconds.
