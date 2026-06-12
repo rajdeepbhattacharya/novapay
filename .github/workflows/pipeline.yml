@@ -63,6 +63,20 @@ jobs:
           dd_site: datadoghq.com
           cpu_count: 2
           enable_performance_statistics: true
+      - name: Security gate — block on HIGH severity findings
+        run: |
+          pip install bandit --quiet
+          echo "=== NovaPay Security Gate ==="
+          bandit -r services/payments/app services/fraud/app services/lending/app \
+            -l -f txt 2>&1 | tee sast-gate.txt || true
+          HIGH_COUNT=$(grep -c "Severity: High" sast-gate.txt 2>/dev/null || echo 0)
+          echo "HIGH severity findings: $HIGH_COUNT"
+          if [ "$HIGH_COUNT" -gt "0" ]; then
+            echo "SECURITY GATE BLOCKED — $HIGH_COUNT HIGH severity vulnerabilities"
+            grep -A3 "Severity: High" sast-gate.txt
+            exit 1
+          fi
+          echo "Security gate passed"
 
 # ════════════════════════════════════════════════════════════
 #  JOBS 2-4: Test (parallel across all 3 services)
