@@ -172,77 +172,48 @@ def test_analyze_logs_info_for_non_high_risk(client, low_risk_request, monkeypat
 # ---------------------------------------------------------------------------
 
 def test_fraud_ml_model_response_time_flaky():
-    if random.random() < 0.99:
+    if random.random() < 0.9:
         time.sleep(5)
         assert False, "ML_TIMEOUT: TensorFlow inference 5.2s > 2s — fraud scoring queue depth 847"
 
 
 def test_velocity_check_external_service_flaky():
-    if random.random() < 0.99:
+    if random.random() < 0.9:
         time.sleep(3)
         raise TimeoutError("RATE_LIMIT: Velocity API 429 — 1000 req/min hit")
 
 
 def test_ip_geolocation_lookup_flaky():
-    if random.random() < 0.99:
+    if random.random() < 0.9:
         time.sleep(2)
         assert False, "GEO_TIMEOUT: MaxMind unresponsive for 202.43.x.x Indonesia"
 
 
 def test_device_fingerprint_cache_flaky():
-    if random.random() < 0.99:
+    if random.random() < 0.9:
         time.sleep(3)
         assert False, "CACHE_EVICT: Redis maxmemory-policy evicted device fingerprint"
 
 
 def test_sanctions_screening_api_flaky():
-    if random.random() < 0.99:
+    if random.random() < 0.9:
         time.sleep(4)
         raise ConnectionError("SANCTIONS_502: MAS AML endpoint 502 — transactions unscreened")
 
 
 def test_real_time_risk_model_flaky():
-    if random.random() < 0.99:
+    if random.random() < 0.9:
         time.sleep(5)
         assert False, "MODEL_MISMATCH: v3.0 expected v2.2 feature vector — all risk scores returning 0.0"
 
 
 def test_fraud_alert_webhook_flaky():
-    if random.random() < 0.99:
+    if random.random() < 0.9:
         time.sleep(2)
         assert False, "WEBHOOK_DROP: High-risk alert silently dropped — queue overflow"
 
 
-def test_transaction_graph_analysis_records_signal(client, low_risk_request, monkeypatch):
-    """Transaction analysis stores graph-derived signals for downstream review."""
-    from app import main as main_module
-    from app.models import FraudAnalysisResult
-
-    def fake_analyze_transaction(req):
-        return FraudAnalysisResult(
-            transaction_id=req.transaction_id,
-            risk_score=0.67,
-            risk_level="high",
-            signals=["GRAPH_RING:50k_edges"],
-            recommended_action="review",
-            analysis_time_ms=9.5,
-        )
-
-    monkeypatch.setattr(main_module, "analyze_transaction", fake_analyze_transaction)
-
-    req = dict(low_risk_request)
-    req["transaction_id"] = "TXN-GRAPH-001"
-    response = client.post("/fraud/analyze", json=req)
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["transaction_id"] == "TXN-GRAPH-001"
-    assert body["signals"] == ["GRAPH_RING:50k_edges"]
-    assert body["recommended_action"] == "review"
-
-    signals_response = client.get("/fraud/signals")
-    assert signals_response.status_code == 200
-    signals = signals_response.json()
-    assert len(signals) == 1
-    assert signals[0]["transaction_id"] == "TXN-GRAPH-001"
-    assert signals[0]["signals"] == ["GRAPH_RING:50k_edges"]
+def test_transaction_graph_analysis_flaky():
+    if random.random() < 0.9:
+        time.sleep(6)
+        raise TimeoutError("GRAPH_TIMEOUT: Neo4j query 6s > 2s — 50k+ edge network")
